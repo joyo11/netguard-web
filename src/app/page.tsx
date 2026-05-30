@@ -43,10 +43,24 @@ export default function Landing() {
           <span className="text-[16px] font-semibold tracking-[-0.01em]">NetGuard</span>
         </div>
         <nav className="hidden items-center gap-8 text-[13.5px] text-ng-sub md:flex">
-          <a className="transition hover:text-ng-ink" href="#">Product</a>
-          <a className="transition hover:text-ng-ink" href="#">How it works</a>
-          <a className="transition hover:text-ng-ink" href="#">Open source</a>
-          <a className="transition hover:text-ng-ink" href="#">Docs</a>
+          <a className="transition hover:text-ng-ink" href="#features">Product</a>
+          <a className="transition hover:text-ng-ink" href="#how">How it works</a>
+          <a
+            className="transition hover:text-ng-ink"
+            href="https://github.com/joyo11/NETGUARD"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open source
+          </a>
+          <a
+            className="transition hover:text-ng-ink"
+            href="https://github.com/joyo11/netguard-web#readme"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Docs
+          </a>
         </nav>
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="text-[13.5px] text-ng-sub transition hover:text-ng-ink">
@@ -167,8 +181,54 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* how it works */}
+      <section
+        id="how"
+        className="relative z-10 mx-auto w-full max-w-[1080px] px-8 pb-16 pt-2 scroll-mt-24"
+      >
+        <div className="mb-7 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-ng-faint">
+            How it works
+          </p>
+          <h2 className="mt-2 text-[28px] font-semibold tracking-[-0.02em] text-ng-ink">
+            Three steps from install to insight
+          </h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            {
+              step: "01",
+              title: "Install the agent",
+              body: "A 6MB local agent reads connection metadata on your machine. No root, no payloads, fully open source.",
+            },
+            {
+              step: "02",
+              title: "Watch your traffic",
+              body: "Live activity streams to your encrypted dashboard. Process, destination, port, bytes — nothing else.",
+            },
+            {
+              step: "03",
+              title: "Ask the AI",
+              body: "Chat in plain English. NetGuard reads patterns, flags suspicious activity, and recommends action.",
+            },
+          ].map((s) => (
+            <div
+              key={s.step}
+              className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 shadow-card backdrop-blur-xl"
+            >
+              <span className="font-mono text-[11px] font-semibold text-ng-teal">{s.step}</span>
+              <h3 className="mt-3 text-[16px] font-semibold tracking-[-0.01em]">{s.title}</h3>
+              <p className="mt-2 text-[13.5px] leading-relaxed text-ng-sub">{s.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* features */}
-      <section className="relative z-10 mx-auto w-full max-w-[1080px] px-8 pb-8">
+      <section
+        id="features"
+        className="relative z-10 mx-auto w-full max-w-[1080px] px-8 pb-8 scroll-mt-24"
+      >
         <div className="grid gap-4 md:grid-cols-3">
           {FEATURES.map((f) => (
             <div
@@ -192,7 +252,10 @@ export default function Landing() {
       </section>
 
       {/* trust strip */}
-      <section className="relative z-10 mx-auto w-full max-w-[1080px] px-8 py-14">
+      <section
+        id="privacy"
+        className="relative z-10 mx-auto w-full max-w-[1080px] px-8 py-14 scroll-mt-24"
+      >
         <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
           {["Open source", "Runs locally", "Encrypted in transit", "Metadata only — never payloads"].map(
             (t) => (
@@ -212,11 +275,24 @@ export default function Landing() {
             <span className="text-[13.5px] font-medium text-ng-sub">NetGuard</span>
           </div>
           <nav className="flex flex-wrap items-center justify-center gap-x-7 gap-y-2 text-[13px] text-ng-faint">
-            <a className="transition hover:text-ng-sub" href="#">GitHub</a>
-            <a className="transition hover:text-ng-sub" href="#">Docs</a>
-            <a className="transition hover:text-ng-sub" href="#">Privacy</a>
-            <a className="transition hover:text-ng-sub" href="#">Security</a>
-            <a className="transition hover:text-ng-sub" href="#">Status</a>
+            <a
+              className="transition hover:text-ng-sub"
+              href="https://github.com/joyo11/netguard-web"
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub
+            </a>
+            <a
+              className="transition hover:text-ng-sub"
+              href="https://github.com/joyo11/netguard-web#readme"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Docs
+            </a>
+            <a className="transition hover:text-ng-sub" href="#privacy">Privacy</a>
+            <a className="transition hover:text-ng-sub" href="#privacy">Security</a>
           </nav>
           <p className="text-[12.5px] text-ng-faint">© 2026 NetGuard</p>
         </div>
