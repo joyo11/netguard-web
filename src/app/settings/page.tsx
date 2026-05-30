@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { SideNav } from "@/components/side-nav";
 import { Check, Copy, Cross, Download } from "@/components/icons";
 
@@ -40,20 +40,57 @@ const INITIAL_NOTIFS = [
   },
 ];
 
-const AGENT_TOKEN = "ng_live_7Qx2-4f81-aA09-d3K7-z19P";
-
 export default function Settings() {
   const [paused, setPaused] = useState(false);
   const [notifs, setNotifs] = useState(INITIAL_NOTIFS);
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [lastUsedAt, setLastUsedAt] = useState<string | null>(null);
+  const [rotating, setRotating] = useState(false);
 
   const masked = "ng_live_••••-••••-••••-••••-••••";
+  const isConnected =
+    lastUsedAt && (Date.now() - new Date(lastUsedAt).getTime()) / 1000 < 60;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const res = await fetch("/api/agent-token", { cache: "no-store" });
+      if (!res.ok || cancelled) return;
+      const data = await res.json();
+      setToken(data.token);
+      setLastUsedAt(data.lastUsedAt);
+    }
+    load();
+    const id = setInterval(load, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   const copyToken = () => {
-    navigator.clipboard?.writeText(AGENT_TOKEN).catch(() => {});
+    if (!token) return;
+    navigator.clipboard?.writeText(token).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  };
+
+  const rotateToken = async () => {
+    if (!confirm("Rotate the token? The current agent will stop until you reinstall with the new token.")) return;
+    setRotating(true);
+    try {
+      const res = await fetch("/api/agent-token", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setToken(data.token);
+        setLastUsedAt(data.lastUsedAt);
+        setRevealed(true);
+      }
+    } finally {
+      setRotating(false);
+    }
   };
 
   return (
@@ -85,21 +122,30 @@ export default function Settings() {
             <Row>
               <div className="flex items-center gap-3">
                 <span className="relative grid h-2.5 w-2.5 place-items-center">
-                  {!paused && (
+                  {isConnected && !paused && (
                     <span className="absolute h-2.5 w-2.5 rounded-full bg-ng-teal/70 pulse-ring" />
                   )}
                   <span
                     className={
-                      "h-2.5 w-2.5 rounded-full " + (paused ? "bg-ng-faint" : "bg-ng-teal")
+                      "h-2.5 w-2.5 rounded-full " +
+                      (paused || !isConnected ? "bg-ng-faint" : "bg-ng-teal")
                     }
                   />
                 </span>
                 <div>
                   <p className="text-[14px] font-medium text-ng-ink">
-                    {paused ? "Disconnected" : "Connected"}
+                    {paused
+                      ? "Paused"
+                      : isConnected
+                      ? "Connected"
+                      : lastUsedAt
+                      ? "Disconnected"
+                      : "Never connected"}
                   </p>
                   <p className="mt-0.5 font-mono text-[12px] text-ng-faint">
-                    {paused ? "Last packet 3m ago" : "Last packet 2 seconds ago"}
+                    {lastUsedAt
+                      ? `Last packet ${relativeTime(lastUsedAt)}`
+                      : "Install the agent to start streaming"}
                   </p>
                 </div>
               </div>
@@ -210,16 +256,17 @@ export default function Settings() {
             <Row>
               <code
                 className={
-                  "tnum font-mono text-[13.5px] tracking-tight " +
+                  "tnum break-all font-mono text-[13.5px] tracking-tight " +
                   (revealed ? "text-ng-ink" : "text-ng-sub")
                 }
               >
-                {revealed ? AGENT_TOKEN : masked}
+                {token == null ? "loading…" : revealed ? token : masked}
               </code>
               <div className="flex items-center gap-2">
                 <button
                   onClick={copyToken}
-                  className="grid h-9 w-9 place-items-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-ng-sub transition hover:bg-white/[0.06] hover:text-ng-ink"
+                  disabled={!token}
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-ng-sub transition hover:bg-white/[0.06] hover:text-ng-ink disabled:opacity-40"
                   title="Copy"
                 >
                   {copied ? (
@@ -230,12 +277,17 @@ export default function Settings() {
                 </button>
                 <button
                   onClick={() => setRevealed((r) => !r)}
-                  className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3.5 py-2 text-[13px] font-medium text-ng-sub transition hover:bg-white/[0.06] hover:text-ng-ink"
+                  disabled={!token}
+                  className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3.5 py-2 text-[13px] font-medium text-ng-sub transition hover:bg-white/[0.06] hover:text-ng-ink disabled:opacity-40"
                 >
                   {revealed ? "Hide" : "Reveal"}
                 </button>
-                <button className="rounded-lg border border-ng-amber/20 bg-ng-amber/[0.06] px-3.5 py-2 text-[13px] font-medium text-ng-amber/90 transition hover:bg-ng-amber/[0.12]">
-                  Rotate
+                <button
+                  onClick={rotateToken}
+                  disabled={rotating}
+                  className="rounded-lg border border-ng-amber/20 bg-ng-amber/[0.06] px-3.5 py-2 text-[13px] font-medium text-ng-amber/90 transition hover:bg-ng-amber/[0.12] disabled:opacity-40"
+                >
+                  {rotating ? "Rotating…" : "Rotate"}
                 </button>
               </div>
             </Row>
@@ -281,6 +333,14 @@ function Row({ children }: { children: ReactNode }) {
 
 function Divider() {
   return <div className="my-4 h-px bg-white/[0.06]" />;
+}
+
+function relativeTime(iso: string): string {
+  const sec = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return `${Math.round(sec)}s ago`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.round(sec / 3600)}h ago`;
+  return `${Math.round(sec / 86400)}d ago`;
 }
 
 function Toggle({
