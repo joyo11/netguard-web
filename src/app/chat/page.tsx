@@ -3,117 +3,126 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { SideNav } from "@/components/side-nav";
-import {
-  Check,
-  Collapse,
-  Dot,
-  Paperclip,
-  Send,
-  Spark,
-} from "@/components/icons";
+import { Check, Collapse, Paperclip, Send, Spark } from "@/components/icons";
 
-type Block =
-  | { kind: "p"; text: string }
-  | { kind: "code"; text: string }
-  | { kind: "flag"; tone: "alert" | "watch"; title: string; text: string };
-
-type Message =
-  | { role: "user"; text: string }
-  | { role: "ai"; tools?: string[]; blocks: Block[] };
+type Message = { role: "user" | "assistant"; content: string };
 
 const SEED_THREAD: Message[] = [
-  { role: "user", text: "What's been happening today?" },
   {
-    role: "ai",
-    tools: ["Scanning today's connections…", "Grouping by destination…"],
-    blocks: [
-      { kind: "p", text: "Mostly quiet. Two things worth flagging:" },
-      {
-        kind: "flag",
-        tone: "alert",
-        title: "SSH brute-force scan — stopped",
-        text: "Someone at 185.143.x.x (Romania) tried SSH 47 times in 90 seconds. Looks like an automated scan. They've stopped now and never got in.",
-      },
-      {
-        kind: "flag",
-        tone: "watch",
-        title: "TV-app tracking spike",
-        text: "Your TV-app is calling tracker.adcorp.net 5× more than usual — they may have pushed a tracking update.",
-      },
-      { kind: "p", text: "Want me to look at either one more closely?" },
-    ],
+    role: "assistant",
+    content:
+      "Hey — I'm watching your network. Ask me what's happening, what's been suspicious, or what a specific connection is up to. I'll pull real numbers and explain plainly.",
   },
 ];
 
 const FOLLOWUP_PROMPTS = [
-  "Show me the SSH attempts",
-  "Block tracker.adcorp.net",
-  "Is 185.143.x.x dangerous?",
+  "What's been happening today?",
+  "Anything suspicious right now?",
+  "Why is my laptop talking to RO?",
 ];
 
-const TOOL_STEPS = [
-  "Looking up traffic patterns…",
-  "Pulling connections to 185.143.x.x…",
-  "Checking threat intel for the IP…",
-];
-
-const DEMO_ANSWER: Block[] = [
-  {
-    kind: "p",
-    text: "Here are the 47 attempts from 185.143.x.x — all hit port 22 between 14:01:03 and 14:02:31, then nothing.",
-  },
-  {
-    kind: "code",
-    text: "14:01:03  sshd  auth-fail  root\n14:01:05  sshd  auth-fail  admin\n14:01:07  sshd  auth-fail  pi\n…  44 more  …",
-  },
-  {
-    kind: "p",
-    text: "Classic dictionary scan against common usernames. None succeeded — your machine refused every one. I'd leave it; want me to silence future alerts from this whole subnet?",
-  },
-];
-
-type Phase = "idle" | "tooling" | "streaming";
+type StreamEvent =
+  | { type: "text"; delta: string }
+  | { type: "tool_start"; name: string; label: string }
+  | { type: "tool_done"; name: string }
+  | { type: "done" }
+  | { type: "error"; message: string };
 
 export default function ChatPage() {
   const [thread, setThread] = useState<Message[]>(SEED_THREAD);
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [toolIdx, setToolIdx] = useState(0);
-  const [shown, setShown] = useState(0);
+  const [input, setInput] = useState("");
+  const [streaming, setStreaming] = useState<string>(""); // partial assistant text
+  const [toolLabels, setToolLabels] = useState<string[]>([]); // active tool indicators
+  const [pending, setPending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: 999999, behavior: "smooth" });
-  }, [thread, phase, toolIdx, shown]);
+  }, [thread, streaming, toolLabels]);
 
-  const ask = (q: string) => {
-    if (phase !== "idle") return;
-    setThread((t) => [...t, { role: "user", text: q }]);
-    setPhase("tooling");
-    setToolIdx(0);
-    let i = 0;
-    const step = setInterval(() => {
-      i += 1;
-      if (i >= TOOL_STEPS.length) {
-        clearInterval(step);
-        setPhase("streaming");
-        setShown(0);
-        let b = 0;
-        const stream = setInterval(() => {
-          b += 1;
-          setShown(b);
-          if (b >= DEMO_ANSWER.length) {
-            clearInterval(stream);
-            setTimeout(() => {
-              setThread((t) => [...t, { role: "ai", blocks: DEMO_ANSWER }]);
-              setPhase("idle");
-            }, 250);
-          }
-        }, 650);
-      } else {
-        setToolIdx(i);
+  async function ask(q: string) {
+    if (pending) return;
+    const text = q.trim();
+    if (!text) return;
+
+    setInput("");
+    setErrorMsg(null);
+    setStreaming("");
+    setToolLabels([]);
+    setPending(true);
+
+    const nextThread: Message[] = [...thread, { role: "user", content: text }];
+    setThread(nextThread);
+
+    let accumulated = "";
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: nextThread }),
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error(`Request failed: ${res.status}`);
       }
-    }, 900);
-  };
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE messages are separated by \n\n
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+
+        for (const part of parts) {
+          const line = part.split("\n").find((l) => l.startsWith("data: "));
+          if (!line) continue;
+          const payload = line.slice(6).trim();
+          if (!payload) continue;
+
+          let evt: StreamEvent;
+          try {
+            evt = JSON.parse(payload) as StreamEvent;
+          } catch {
+            continue;
+          }
+
+          if (evt.type === "text") {
+            accumulated += evt.delta;
+            setStreaming(accumulated);
+          } else if (evt.type === "tool_start") {
+            setToolLabels((labels) => [...labels, evt.label]);
+          } else if (evt.type === "tool_done") {
+            // keep them visible — they fade with the final answer
+          } else if (evt.type === "error") {
+            setErrorMsg(evt.message);
+            break;
+          } else if (evt.type === "done") {
+            // committed below after loop
+          }
+        }
+      }
+
+      if (accumulated) {
+        setThread((t) => [...t, { role: "assistant", content: accumulated }]);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setErrorMsg(message);
+    } finally {
+      setStreaming("");
+      setToolLabels([]);
+      setPending(false);
+    }
+  }
 
   return (
     <div className="grain ambient relative flex min-h-screen w-full">
@@ -148,27 +157,44 @@ export default function ChatPage() {
               <MessageView key={i} m={m} />
             ))}
 
-            {phase === "tooling" && (
+            {(toolLabels.length > 0 || streaming) && (
               <div className="flex gap-3 streamin">
                 <Avatar />
-                <div className="flex items-center gap-2.5 rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3">
-                  <span className="relative grid h-4 w-4 place-items-center">
-                    <span className="h-3.5 w-3.5 rounded-full border-2 border-ng-teal/30 border-t-ng-teal animate-spin" />
-                  </span>
-                  <span className="font-mono text-[12.5px] text-ng-sub">{TOOL_STEPS[toolIdx]}</span>
+                <div className="min-w-0 flex-1 space-y-2.5">
+                  {toolLabels.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {toolLabels.map((label, i) => (
+                        <span
+                          key={i}
+                          className="flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1 font-mono text-[11.5px] text-ng-sub"
+                        >
+                          {i === toolLabels.length - 1 && !streaming ? (
+                            <span className="h-3 w-3 rounded-full border-2 border-ng-teal/30 border-t-ng-teal animate-spin" />
+                          ) : (
+                            <Check className="h-3 w-3 text-ng-teal/70" />
+                          )}
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {streaming && (
+                    <div className="space-y-3 rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5">
+                      <p className="text-[14px] leading-relaxed text-ng-ink/90 whitespace-pre-wrap">
+                        {streaming}
+                        <span className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse bg-ng-teal" />
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {phase === "streaming" && (
-              <div className="flex gap-3 streamin">
-                <Avatar />
-                <div className="min-w-0 flex-1 space-y-3 rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5">
-                  {DEMO_ANSWER.slice(0, shown).map((b, i) => (
-                    <BlockView key={i} b={b} />
-                  ))}
-                  <span className="inline-block h-4 w-1.5 translate-y-0.5 animate-pulse bg-ng-teal" />
-                </div>
+            {errorMsg && (
+              <div className="rounded-xl border border-ng-red/20 bg-ng-red/[0.06] px-4 py-3 text-[13px] text-ng-red">
+                {errorMsg.includes("ANTHROPIC_API_KEY")
+                  ? "Chat isn't connected yet — server is missing ANTHROPIC_API_KEY."
+                  : `Something went wrong: ${errorMsg}`}
               </div>
             )}
           </div>
@@ -182,7 +208,7 @@ export default function ChatPage() {
                 <button
                   key={p}
                   onClick={() => ask(p)}
-                  disabled={phase !== "idle"}
+                  disabled={pending}
                   className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3.5 py-1.5 text-[12.5px] text-ng-sub transition hover:border-ng-teal/30 hover:bg-ng-teal/[0.06] hover:text-ng-ink disabled:opacity-40"
                 >
                   {p}
@@ -197,19 +223,21 @@ export default function ChatPage() {
                 <Paperclip className="h-4 w-4" />
               </button>
               <input
-                className="min-w-0 flex-1 bg-transparent py-1 text-[14px] text-ng-ink placeholder:text-ng-faint focus:outline-none"
-                placeholder="Ask about a connection, process, or host…"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  const v = (e.target as HTMLInputElement).value.trim();
-                  if (e.key === "Enter" && v) {
-                    ask(v);
-                    (e.target as HTMLInputElement).value = "";
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    ask(input);
                   }
                 }}
+                disabled={pending}
+                className="min-w-0 flex-1 bg-transparent py-1 text-[14px] text-ng-ink placeholder:text-ng-faint focus:outline-none disabled:opacity-50"
+                placeholder="Ask about a connection, process, or host…"
               />
               <button
-                onClick={() => ask("Show me the SSH attempts")}
-                disabled={phase !== "idle"}
+                onClick={() => ask(input)}
+                disabled={pending || !input.trim()}
                 className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-ng-teal text-ng-canvas transition hover:bg-ng-teal/90 disabled:opacity-40"
               >
                 <Send className="h-4 w-4" />
@@ -230,7 +258,7 @@ function MessageView({ m }: { m: Message }) {
     return (
       <div className="flex justify-end">
         <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/[0.07] px-4 py-2.5 text-[14px] leading-relaxed text-ng-ink">
-          {m.text}
+          {m.content}
         </div>
       </div>
     );
@@ -238,52 +266,12 @@ function MessageView({ m }: { m: Message }) {
   return (
     <div className="flex gap-3">
       <Avatar />
-      <div className="min-w-0 flex-1 space-y-3">
-        {m.tools && (
-          <div className="flex flex-wrap gap-1.5">
-            {m.tools.map((t) => (
-              <span
-                key={t}
-                className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.02] px-2.5 py-1 font-mono text-[11px] text-ng-faint"
-              >
-                <Check className="h-3 w-3 text-ng-teal/70" /> {t}
-              </span>
-            ))}
-          </div>
-        )}
+      <div className="min-w-0 flex-1">
         <div className="space-y-3 rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5">
-          {m.blocks.map((b, i) => (
-            <BlockView key={i} b={b} />
-          ))}
+          <p className="text-[14px] leading-relaxed text-ng-ink/90 whitespace-pre-wrap">
+            {m.content}
+          </p>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function BlockView({ b }: { b: Block }) {
-  if (b.kind === "p") {
-    return <p className="text-[14px] leading-relaxed text-ng-ink/90">{b.text}</p>;
-  }
-  if (b.kind === "code") {
-    return (
-      <pre className="tnum overflow-x-auto rounded-lg border border-white/[0.06] bg-[#080b10] p-3 font-mono text-[12px] leading-relaxed text-ng-sub whitespace-pre-wrap">
-        {b.text}
-      </pre>
-    );
-  }
-  const tone =
-    b.tone === "alert"
-      ? { bar: "bg-ng-red",   ring: "border-ng-red/20 bg-ng-red/[0.06]",     dot: "text-ng-red" }
-      : { bar: "bg-ng-amber", ring: "border-ng-amber/20 bg-ng-amber/[0.06]", dot: "text-ng-amber" };
-  return (
-    <div className={"relative overflow-hidden rounded-xl border px-3.5 py-3 " + tone.ring}>
-      <span className={"absolute inset-y-0 left-0 w-1 " + tone.bar} />
-      <div className="pl-2">
-        <p className={"flex items-center gap-2 text-[12.5px] font-semibold " + tone.dot}>
-          <Dot className="h-2 w-2" /> {b.title}
-        </p>
-        <p className="mt-1 text-[13.5px] leading-relaxed text-ng-ink/85">{b.text}</p>
       </div>
     </div>
   );
