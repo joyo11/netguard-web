@@ -1,59 +1,47 @@
-// Email magic-link login — no passwords, no OAuth setup needed.
-// Server action submits the email, Supabase sends a link, user clicks it,
-// /auth/callback verifies and lands them on the next URL.
+"use client";
 
-import { Shield } from "@/components/icons";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+// Google OAuth-only login. Magic-link form dropped per Vinod — Google
+// is one click, no email rate limit, and reads "real product" to a
+// portfolio reviewer.
+
 import Link from "next/link";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Shield } from "@/components/icons";
+import { createClient } from "@/lib/supabase/browser";
 
-type SearchParams = Promise<{ next?: string; sent?: string; error?: string }>;
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginInner />
+    </Suspense>
+  );
+}
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: SearchParams;
-}) {
-  const sp = await searchParams;
-  const sent = sp.sent === "1";
-  const error = sp.error;
-  const next = sp.next || "/dashboard";
+function LoginInner() {
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") || "/dashboard";
+  const error = searchParams.get("error");
+  const [pending, setPending] = useState(false);
 
-  async function sendMagicLink(formData: FormData) {
-    "use server";
-    const email = String(formData.get("email") || "").trim().toLowerCase();
-    const next = String(formData.get("next") || "/dashboard");
-
-    if (!email || !email.includes("@")) {
-      redirect(`/auth/login?next=${encodeURIComponent(next)}&error=invalid_email`);
-    }
-
-    const supabase = await createClient();
-
-    // Build the origin from the actual request headers — bulletproof
-    // regardless of Vercel env var quirks. x-forwarded-* are set by
-    // Vercel's edge in production.
-    const h = await headers();
-    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-    const origin = `${proto}://${host}`;
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
+  async function signInWithGoogle() {
+    if (pending) return;
+    setPending(true);
+    const supabase = createClient();
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "";
+    const { error: err } = await supabase.auth.signInWithOAuth({
+      provider: "google",
       options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        queryParams: { access_type: "offline", prompt: "consent" },
       },
     });
-
-    if (error) {
-      redirect(
-        `/auth/login?next=${encodeURIComponent(next)}&error=${encodeURIComponent(error.message)}`
-      );
+    if (err) {
+      setPending(false);
+      // Redirects happen via supabase — if we're still here, something failed.
+      window.location.href = `/auth/login?error=${encodeURIComponent(err.message)}`;
     }
-
-    redirect(`/auth/login?next=${encodeURIComponent(next)}&sent=1`);
   }
 
   return (
@@ -70,52 +58,47 @@ export default async function LoginPage({
           <div className="relative rounded-[20px] border border-white/[0.07] bg-white/[0.025] p-7 shadow-card backdrop-blur-xl">
             <div className="pointer-events-none absolute inset-x-7 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-            {sent ? (
-              <CheckEmailState />
-            ) : (
-              <>
-                <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ng-ink">
-                  Sign in to NetGuard
-                </h1>
-                <p className="mt-1.5 text-[13.5px] leading-relaxed text-ng-sub">
-                  Enter your email and we&apos;ll send you a one-time sign-in link.
-                </p>
+            <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ng-ink">
+              Sign in to NetGuard
+            </h1>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ng-sub">
+              One click with Google. No passwords, no email links to wait for.
+            </p>
 
-                <form action={sendMagicLink} className="mt-6 space-y-3">
-                  <input type="hidden" name="next" value={next} />
-                  <input
-                    type="email"
-                    name="email"
-                    required
-                    placeholder="you@example.com"
-                    className="w-full rounded-xl border border-white/[0.09] bg-[#0a0d13] px-3.5 py-3 text-[14px] text-ng-ink placeholder:text-ng-faint focus:border-ng-teal/40 focus:outline-none"
-                  />
+            <button
+              onClick={signInWithGoogle}
+              disabled={pending}
+              className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl bg-white py-3 text-[14px] font-semibold text-[#1f2024] transition hover:bg-white/95 disabled:opacity-60"
+            >
+              {pending ? (
+                <>
+                  <span className="h-4 w-4 rounded-full border-2 border-[#1f2024]/30 border-t-[#1f2024] animate-spin" />
+                  Opening Google…
+                </>
+              ) : (
+                <>
+                  <GoogleMark className="h-[18px] w-[18px]" />
+                  Continue with Google
+                </>
+              )}
+            </button>
 
-                  {error && (
-                    <p className="rounded-lg border border-ng-red/20 bg-ng-red/[0.06] px-3 py-2 text-[12.5px] text-ng-red">
-                      {error === "invalid_email" ? "That doesn't look like a valid email." : error}
-                    </p>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="w-full rounded-xl bg-ng-teal py-3 text-[14px] font-semibold text-ng-canvas shadow-glow transition hover:bg-ng-teal/90"
-                  >
-                    Send sign-in link
-                  </button>
-                </form>
-
-                <p className="mt-5 text-center text-[12px] text-ng-faint">
-                  No password to remember. We&apos;ll email you a link that signs you in.
-                </p>
-              </>
+            {error && (
+              <p className="mt-4 rounded-lg border border-ng-red/20 bg-ng-red/[0.06] px-3 py-2 text-[12.5px] text-ng-red">
+                {error}
+              </p>
             )}
+
+            <p className="mt-5 text-center text-[11.5px] leading-relaxed text-ng-faint">
+              We never see your password. Google handles the sign-in; we only get
+              your email so we can attach your network data to your account.
+            </p>
           </div>
 
           <p className="mt-5 text-center text-[12px] text-ng-faint">
             New here?{" "}
-            <Link href="/install" className="text-ng-sub hover:text-ng-ink">
-              Start with the install guide
+            <Link href="/" className="text-ng-sub hover:text-ng-ink">
+              See what NetGuard does
             </Link>
           </p>
         </div>
@@ -124,26 +107,26 @@ export default async function LoginPage({
   );
 }
 
-function CheckEmailState() {
+function GoogleMark({ className }: { className?: string }) {
+  // Google's official "G" mark colors.
   return (
-    <div>
-      <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-ng-teal/15 text-ng-teal">
-        <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.6">
-          <path d="M3 7l9 6 9-6M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M3 7l2-2h14l2 2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-      <h1 className="mt-4 text-center text-[20px] font-semibold tracking-[-0.02em]">
-        Check your email
-      </h1>
-      <p className="mx-auto mt-2 max-w-[300px] text-center text-[13.5px] leading-relaxed text-ng-sub">
-        We sent you a one-time sign-in link. Click it and you&apos;ll land back here, signed in.
-      </p>
-      <p className="mt-5 text-center text-[12px] text-ng-faint">
-        Didn&apos;t arrive in a minute or two? Check spam or{" "}
-        <Link href="/auth/login" className="text-ng-sub underline decoration-white/20 underline-offset-4 hover:text-ng-ink">
-          try again
-        </Link>
-      </p>
-    </div>
+    <svg viewBox="0 0 18 18" className={className}>
+      <path
+        d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
+        fill="#4285F4"
+      />
+      <path
+        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.836.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
+        fill="#34A853"
+      />
+      <path
+        d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+        fill="#EA4335"
+      />
+    </svg>
   );
 }
