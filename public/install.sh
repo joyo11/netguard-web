@@ -191,7 +191,10 @@ def main():
     while True:
         try:
             batch = parse_lsof()
-            post_batch(endpoint, token, hostname, batch)
+            if not batch:
+                print("[netguard] tick: 0 established connections — nothing to send", flush=True)
+            else:
+                post_batch(endpoint, token, hostname, batch)
         except KeyboardInterrupt:
             print("[netguard] shutting down (SIGINT)", flush=True)
             break
