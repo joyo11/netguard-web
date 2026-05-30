@@ -63,7 +63,10 @@ export default function Landing() {
           </a>
         </nav>
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-[13.5px] text-ng-sub transition hover:text-ng-ink">
+          <Link
+            href="/auth/login"
+            className="text-[13.5px] text-ng-sub transition hover:text-ng-ink"
+          >
             Sign in
           </Link>
           <Link
