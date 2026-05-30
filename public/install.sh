@@ -92,12 +92,17 @@ def is_ip(s: str) -> bool:
 def parse_lsof():
     """Returns a list of dict: {proc, app, remote_host, remote_ip, port}."""
     try:
-        out = subprocess.run(
+        res = subprocess.run(
             ["lsof", "-i", "-n", "-P", "-sTCP:ESTABLISHED"],
             capture_output=True,
             text=True,
             timeout=HTTP_TIMEOUT_SEC,
-        ).stdout
+        )
+        out = res.stdout
+        if res.returncode != 0:
+            print(f"[netguard] lsof returned non-zero ({res.returncode}): {res.stderr.strip()[:200]}", flush=True)
+        line_count = len(out.splitlines())
+        print(f"[netguard] lsof output: {line_count} lines", flush=True)
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
         print(f"[netguard] lsof failed: {e}", flush=True)
         return []
