@@ -1,12 +1,12 @@
 "use client";
 
-// Google OAuth-only login. Magic-link form dropped per Vinod — Google
-// is one click, no email rate limit, and reads "real product" to a
-// portfolio reviewer.
+// Auth page: Google OAuth (primary) + email/password (fallback).
+// Magic links were dropped earlier (rate limit). Password form added
+// per Vinod's pivot when Google OAuth got stuck.
 
 import Link from "next/link";
 import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Shield } from "@/components/icons";
 import { createClient } from "@/lib/supabase/browser";
 
@@ -19,28 +19,48 @@ export default function LoginPage() {
 }
 
 function LoginInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/dashboard";
-  const error = searchParams.get("error");
-  const [pending, setPending] = useState(false);
+  const initialError = searchParams.get("error");
+  const [pending, setPending] = useState<"google" | "password" | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   async function signInWithGoogle() {
     if (pending) return;
-    setPending(true);
+    setError(null);
+    setPending("google");
     const supabase = createClient();
-    const origin =
-      typeof window !== "undefined" ? window.location.origin : "";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
+      options: { redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` },
     });
     if (err) {
-      setPending(false);
-      // Redirects happen via supabase — if we're still here, something failed.
-      window.location.href = `/auth/login?error=${encodeURIComponent(err.message)}`;
+      setPending(null);
+      setError(err.message);
     }
+  }
+
+  async function signInWithPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (pending) return;
+    setError(null);
+    setPending("password");
+    const supabase = createClient();
+    const { error: err } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (err) {
+      setPending(null);
+      setError(err.message);
+      return;
+    }
+    router.push(next);
+    router.refresh();
   }
 
   return (
@@ -61,15 +81,15 @@ function LoginInner() {
               Sign in to NetGuard
             </h1>
             <p className="mt-1.5 text-[13.5px] leading-relaxed text-ng-sub">
-              One click with Google. No passwords, no email links to wait for.
+              One click with Google, or use your email and password.
             </p>
 
             <button
               onClick={signInWithGoogle}
-              disabled={pending}
+              disabled={pending !== null}
               className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl bg-white py-3 text-[14px] font-semibold text-[#1f2024] transition hover:bg-white/95 disabled:opacity-60"
             >
-              {pending ? (
+              {pending === "google" ? (
                 <>
                   <span className="h-4 w-4 rounded-full border-2 border-[#1f2024]/30 border-t-[#1f2024] animate-spin" />
                   Opening Google…
@@ -82,6 +102,47 @@ function LoginInner() {
               )}
             </button>
 
+            <div className="my-5 flex items-center gap-3">
+              <span className="h-px flex-1 bg-white/[0.07]" />
+              <span className="text-[11px] uppercase tracking-[0.18em] text-ng-faint">or</span>
+              <span className="h-px flex-1 bg-white/[0.07]" />
+            </div>
+
+            <form onSubmit={signInWithPassword} className="space-y-3">
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-xl border border-white/[0.09] bg-[#0a0d13] px-3.5 py-3 text-[14px] text-ng-ink placeholder:text-ng-faint focus:border-ng-teal/40 focus:outline-none"
+              />
+              <input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full rounded-xl border border-white/[0.09] bg-[#0a0d13] px-3.5 py-3 text-[14px] text-ng-ink placeholder:text-ng-faint focus:border-ng-teal/40 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={pending !== null}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-ng-teal py-3 text-[14px] font-semibold text-ng-canvas shadow-glow transition hover:bg-ng-teal/90 disabled:opacity-60"
+              >
+                {pending === "password" ? (
+                  <>
+                    <span className="h-4 w-4 rounded-full border-2 border-ng-canvas/30 border-t-ng-canvas animate-spin" />
+                    Signing in…
+                  </>
+                ) : (
+                  "Sign in with email"
+                )}
+              </button>
+            </form>
+
             {error && (
               <p className="mt-4 rounded-lg border border-ng-red/20 bg-ng-red/[0.06] px-3 py-2 text-[12.5px] text-ng-red">
                 {error}
@@ -89,8 +150,8 @@ function LoginInner() {
             )}
 
             <p className="mt-5 text-center text-[11.5px] leading-relaxed text-ng-faint">
-              We never see your password. Google handles the sign-in; we only get
-              your email so we can attach your network data to your account.
+              We never see your Google password. We only get your email so we can attach your
+              network data to your account.
             </p>
           </div>
 
@@ -107,7 +168,6 @@ function LoginInner() {
 }
 
 function GoogleMark({ className }: { className?: string }) {
-  // Google's official "G" mark colors.
   return (
     <svg viewBox="0 0 18 18" className={className}>
       <path
