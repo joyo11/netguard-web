@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SideNav } from "@/components/side-nav";
 import {
@@ -55,6 +56,14 @@ export function DashboardClient({
   const isAgentLive =
     summary.agentLastSeenAt &&
     Date.now() - new Date(summary.agentLastSeenAt).getTime() < 60_000;
+
+  // Live-refresh the server component every 5s so new agent batches surface
+  // without the user having to manually reload.
+  const router = useRouter();
+  useEffect(() => {
+    const id = setInterval(() => router.refresh(), 5_000);
+    return () => clearInterval(id);
+  }, [router]);
 
   return (
     <div className="grain ambient relative flex min-h-screen w-full">
