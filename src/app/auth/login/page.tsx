@@ -5,6 +5,7 @@
 import { Shield } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
 
 type SearchParams = Promise<{ next?: string; sent?: string; error?: string }>;
@@ -29,12 +30,14 @@ export default async function LoginPage({
     }
 
     const supabase = await createClient();
-    const origin =
-      process.env.VERCEL_PROJECT_PRODUCTION_URL
-        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-        : process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000";
+
+    // Build the origin from the actual request headers — bulletproof
+    // regardless of Vercel env var quirks. x-forwarded-* are set by
+    // Vercel's edge in production.
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+    const origin = `${proto}://${host}`;
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
