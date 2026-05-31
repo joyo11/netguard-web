@@ -231,14 +231,39 @@ function FeedTable({ feed }: { feed: Connection[] }) {
       <div className="divide-y divide-white/[0.04]">
         {feed.map((r, i) => {
           const m = STATE_META[r.state];
+          // Aaron's tonal hierarchy — safe rows recede, watch + alert get
+          // a left accent bar + subtle wash, alert rows tint slightly more.
+          const rowBg =
+            r.state === "alert"
+              ? "bg-ng-red/[0.04] hover:bg-ng-red/[0.07]"
+              : r.state === "watch"
+              ? "bg-ng-amber/[0.025] hover:bg-ng-amber/[0.05]"
+              : "hover:bg-white/[0.02]";
+          const accentBar =
+            r.state === "alert"
+              ? "bg-ng-red"
+              : r.state === "watch"
+              ? "bg-ng-amber"
+              : "bg-transparent";
           return (
             <div
               key={i}
-              className="grid grid-cols-[64px_minmax(140px,1fr)_minmax(200px,1.4fr)_56px_88px_88px] items-center gap-3 border-t border-white/[0.04] px-5 py-3 transition hover:bg-white/[0.025]"
+              className={
+                "relative grid grid-cols-[64px_minmax(140px,1fr)_minmax(200px,1.4fr)_56px_88px_88px] items-center gap-3 border-t border-white/[0.04] px-5 py-3 transition " +
+                rowBg
+              }
             >
+              <span className={"absolute inset-y-0 left-0 w-[2px] " + accentBar} />
               <span className="tnum font-mono text-[12.5px] text-ng-faint">{r.t}</span>
               <div className="min-w-0">
-                <p className="truncate text-[13.5px] font-medium text-ng-ink">{r.app}</p>
+                <p
+                  className={
+                    "truncate text-[13.5px] font-medium " +
+                    (r.state === "safe" ? "text-ng-ink/85" : "text-ng-ink")
+                  }
+                >
+                  {r.app}
+                </p>
                 <p className="truncate font-mono text-[11px] text-ng-faint">{r.proc}</p>
               </div>
               <div className="flex min-w-0 items-center gap-2">

@@ -42,11 +42,23 @@ function ChatPage({ hostname }: { hostname: string | null }) {
   const [toolLabels, setToolLabels] = useState<string[]>([]); // active tool indicators
   const [pending, setPending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [glowKey, setGlowKey] = useState(0); // bumps each time the AI finishes
   const scroller = useRef<HTMLDivElement>(null);
+  const prevPendingRef = useRef(false);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: 999999, behavior: "smooth" });
   }, [thread, streaming, toolLabels]);
+
+  // Aaron's "AI moment" — when a response finishes, briefly glow the last
+  // assistant message's border. Bump glowKey so framer re-runs the animation
+  // even if the previous glow's still mid-flight.
+  useEffect(() => {
+    if (prevPendingRef.current && !pending) {
+      setGlowKey((k) => k + 1);
+    }
+    prevPendingRef.current = pending;
+  }, [pending]);
 
   async function ask(q: string) {
     if (pending) return;
@@ -137,36 +149,44 @@ function ChatPage({ hostname }: { hostname: string | null }) {
 
       <div className="relative z-10 flex min-h-screen flex-1 flex-col">
         <MobileBar active="chat" />
-        {/* header */}
-        <header className="flex items-center justify-between border-b border-white/[0.06] bg-[#0a0d13]/50 px-7 py-4 backdrop-blur-xl">
-          <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-ng-teal/15 text-ng-teal">
-              <Spark className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-[15px] font-semibold tracking-[-0.01em]">NetGuard AI</p>
-              <p className="flex items-center gap-1.5 text-[11.5px] text-ng-faint">
-                <span className="h-1.5 w-1.5 rounded-full bg-ng-teal" />{" "}
-                {hostname
-                  ? `Connected to ${hostname} · Powered by Claude`
-                  : "Awaiting agent · Powered by Claude"}
-              </p>
-            </div>
+        {/* header — single tight line, custom glyph (per Aaron) */}
+        <header className="flex items-center justify-between border-b border-white/[0.06] bg-[#0a0d13]/50 px-7 py-3 backdrop-blur-xl">
+          <div className="flex items-center gap-2.5">
+            <AiGlyph />
+            <h1 className="text-[13.5px] font-semibold tracking-[-0.01em] text-ng-ink">
+              NetGuard
+            </h1>
+            <span className="text-[11px] text-ng-faint">·</span>
+            <p className="flex items-center gap-1.5 text-[11.5px] text-ng-faint">
+              <span className="relative grid h-1.5 w-1.5 place-items-center">
+                <span className="absolute h-1.5 w-1.5 rounded-full bg-ng-teal/70 pulse-ring" />
+                <span className="h-1.5 w-1.5 rounded-full bg-ng-teal" />
+              </span>
+              {hostname ? hostname : "awaiting agent"}
+            </p>
           </div>
           <Link
             href="/dashboard"
-            className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[12.5px] text-ng-sub transition hover:bg-white/[0.06] hover:text-ng-ink"
+            className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[12px] text-ng-sub transition hover:bg-white/[0.06] hover:text-ng-ink"
           >
-            <Collapse className="h-3.5 w-3.5" /> Collapse to drawer
+            <Collapse className="h-3.5 w-3.5" /> Collapse
           </Link>
         </header>
 
         {/* thread */}
         <div ref={scroller} className="flex-1 overflow-y-auto px-6 py-8">
           <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
-            {thread.map((m, i) => (
-              <MessageView key={i} m={m} />
-            ))}
+            {thread.map((m, i) => {
+              const isLastAssistant =
+                i === thread.length - 1 && m.role === "assistant";
+              return (
+                <MessageView
+                  key={i}
+                  m={m}
+                  glowKey={isLastAssistant ? glowKey : 0}
+                />
+              );
+            })}
 
             {(toolLabels.length > 0 || streaming) && (
               <motion.div
@@ -278,7 +298,7 @@ function ChatPage({ hostname }: { hostname: string | null }) {
   );
 }
 
-function MessageView({ m }: { m: Message }) {
+function MessageView({ m, glowKey }: { m: Message; glowKey: number }) {
   if (m.role === "user") {
     return (
       <motion.div
@@ -302,9 +322,34 @@ function MessageView({ m }: { m: Message }) {
     >
       <Avatar />
       <div className="min-w-0 flex-1">
-        <div className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5">
+        <motion.div
+          // Glow on completion. key changes each time the AI finishes, which
+          // re-runs the animation. boxShadow goes through 0 → bright → 0.
+          key={`bubble-${glowKey}`}
+          className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5"
+          initial={false}
+          animate={
+            glowKey > 0
+              ? {
+                  boxShadow: [
+                    "0 0 0 0 rgba(61,220,151,0)",
+                    "0 0 24px 0 rgba(61,220,151,0.45)",
+                    "0 0 16px 0 rgba(61,220,151,0.25)",
+                    "0 0 0 0 rgba(61,220,151,0)",
+                  ],
+                  borderColor: [
+                    "rgba(255,255,255,0.07)",
+                    "rgba(61,220,151,0.5)",
+                    "rgba(61,220,151,0.3)",
+                    "rgba(255,255,255,0.07)",
+                  ],
+                }
+              : undefined
+          }
+          transition={{ duration: 1.4, ease: "easeInOut", times: [0, 0.2, 0.5, 1] }}
+        >
           <Markdown>{m.content}</Markdown>
-        </div>
+        </motion.div>
       </div>
     </motion.div>
   );
@@ -312,8 +357,46 @@ function MessageView({ m }: { m: Message }) {
 
 function Avatar() {
   return (
-    <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-ng-teal/25 to-emerald-700/20 text-ng-teal">
-      <Spark className="h-4 w-4" />
+    <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-ng-teal/30 to-emerald-700/20 text-ng-teal shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_8px_-2px_rgba(61,220,151,0.25)]">
+      <AiGlyphSmall />
     </span>
+  );
+}
+
+// Custom AI glyph — bonded shield + spark. Distinctive vs the generic
+// Spark icon (Aaron's call).
+function AiGlyph() {
+  return (
+    <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-ng-teal/30 to-emerald-700/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_10px_-2px_rgba(61,220,151,0.3)]">
+      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] text-ng-teal" fill="none">
+        <path
+          d="M12 2.5l8 2.8v6.2c0 4.8-3.3 8.5-8 10.5-4.7-2-8-5.7-8-10.5V5.3l8-2.8z"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          fill="rgba(61,220,151,0.08)"
+        />
+        <path
+          d="M12 8l1.1 3.1L16 12l-2.9 1L12 16l-1.1-3L8 12l2.9-.9L12 8z"
+          fill="currentColor"
+        />
+      </svg>
+    </span>
+  );
+}
+
+function AiGlyphSmall() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none">
+      <path
+        d="M12 2.5l8 2.8v6.2c0 4.8-3.3 8.5-8 10.5-4.7-2-8-5.7-8-10.5V5.3l8-2.8z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        fill="rgba(61,220,151,0.08)"
+      />
+      <path
+        d="M12 8l1.1 3.1L16 12l-2.9 1L12 16l-1.1-3L8 12l2.9-.9L12 8z"
+        fill="currentColor"
+      />
+    </svg>
   );
 }

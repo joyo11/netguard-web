@@ -4,9 +4,9 @@ import {
   Check,
   FeedIcon,
   Shield,
-  ShieldCheck,
   ShieldFeatureIcon,
 } from "@/components/icons";
+import { AnimatedMock, RevealCard, RevealSection } from "@/components/landing-bits";
 
 const FEATURES = [
   {
@@ -24,13 +24,6 @@ const FEATURES = [
     body: "Get a clear recommendation, then decide. NetGuard never blocks or acts without your say-so.",
     icon: "shield" as const,
   },
-];
-
-const MINI_FEED = [
-  { app: "Chrome",  host: "google.com",          bytes: "12.4 KB", state: "safe"  as const },
-  { app: "Slack",   host: "slack.com",           bytes: "3.2 KB",  state: "safe"  as const },
-  { app: "unknown", host: "185.143.x.x (RO)",    bytes: "8 KB",    state: "alert" as const },
-  { app: "TV-app",  host: "tracker.adcorp.net",  bytes: "4.1 KB",  state: "watch" as const },
 ];
 
 export default function Landing() {
@@ -85,12 +78,16 @@ export default function Landing() {
           Open source · runs entirely on your machine
         </div>
         <h1
-          className="mx-auto mt-6 max-w-[760px] text-[52px] font-semibold leading-[1.05] tracking-[-0.03em] text-ng-ink"
-          style={{ textWrap: "balance" }}
+          className="mx-auto mt-8 max-w-[860px] font-semibold leading-[0.98] tracking-[-0.035em] text-ng-ink"
+          style={{ textWrap: "balance", fontSize: "clamp(48px, 8vw, 96px)" }}
         >
-          Know what your computer is actually doing online
+          Know what your computer is{" "}
+          <span className="bg-gradient-to-r from-ng-teal via-emerald-300 to-ng-teal bg-clip-text text-transparent">
+            actually
+          </span>{" "}
+          doing online
         </h1>
-        <p className="mx-auto mt-5 max-w-[560px] text-[17px] leading-relaxed text-ng-sub">
+        <p className="mx-auto mt-6 max-w-[580px] text-[17px] leading-relaxed text-ng-sub md:text-[18px]">
           An AI security co-pilot that explains your network traffic in plain English — so you can stop guessing what&apos;s phoning home.
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
@@ -110,79 +107,10 @@ export default function Landing() {
         <p className="mt-4 font-mono text-[12px] text-ng-faint">curl -fsSL https://get.netguard.sh | sh</p>
       </section>
 
-      {/* product screenshot (stylized dashboard mock) */}
-      <section className="relative z-10 mx-auto w-full max-w-[1080px] px-8 pb-20">
-        <div className="relative rounded-2xl border border-white/[0.08] bg-[#0c1118]/80 p-2.5 shadow-card backdrop-blur-xl">
-          <div className="pointer-events-none absolute -inset-x-10 -top-10 h-40 bg-gradient-to-b from-ng-teal/10 to-transparent blur-2xl" />
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-ng-canvas">
-            {/* window chrome */}
-            <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">
-              <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
-              <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
-              <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
-              <span className="ml-3 font-mono text-[11px] text-ng-faint">netguard.app/dashboard</span>
-            </div>
-            <div className="p-5">
-              {/* status banner mock */}
-              <div className="relative overflow-hidden rounded-xl border border-ng-teal/20 bg-ng-teal/[0.06] px-4 py-3">
-                <span className="absolute inset-y-0 left-0 w-1 bg-ng-teal" />
-                <div className="flex items-center justify-between pl-2">
-                  <span className="flex items-center gap-2.5 text-[13.5px] font-semibold text-ng-ink">
-                    <span className="grid h-7 w-7 place-items-center rounded-full bg-ng-teal/15 text-ng-teal">
-                      <ShieldCheck className="h-4 w-4" />
-                    </span>
-                    All quiet — 0 alerts today
-                  </span>
-                  <span className="tnum text-[12px] text-ng-sub">248 connections · 1 watching</span>
-                </div>
-              </div>
-              {/* mini feed */}
-              <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                {MINI_FEED.map((r, i) => {
-                  const tone =
-                    r.state === "alert"
-                      ? { t: "text-ng-red",   d: "bg-ng-red",   l: "Alert" }
-                      : r.state === "watch"
-                      ? { t: "text-ng-amber", d: "bg-ng-amber", l: "Watch" }
-                      : { t: "text-ng-teal",  d: "bg-ng-teal",  l: "Safe"  };
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between border-t border-white/[0.04] px-4 py-2.5 first:border-t-0"
-                    >
-                      <span className="w-24 text-[12.5px] font-medium text-ng-ink">{r.app}</span>
-                      <span
-                        className={
-                          "flex-1 truncate font-mono text-[12px] " +
-                          (r.state === "alert"
-                            ? "text-ng-red"
-                            : r.state === "watch"
-                            ? "text-ng-amber"
-                            : "text-ng-sub")
-                        }
-                      >
-                        {r.host}
-                      </span>
-                      <span className="tnum w-20 text-right font-mono text-[12px] text-ng-sub">
-                        {r.bytes}
-                      </span>
-                      <span
-                        className={
-                          "ml-4 flex w-16 items-center justify-end gap-1.5 text-[11px] font-medium " +
-                          tone.t
-                        }
-                      >
-                        <span className={"h-1.5 w-1.5 rounded-full " + tone.d} />
-                        {tone.l}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* product screenshot — now an animated mock that cycles scenes */}
+      <RevealSection className="relative z-10 mx-auto w-full max-w-[1080px] px-4 pb-20 md:px-8">
+        <AnimatedMock />
+      </RevealSection>
 
       {/* how it works */}
       <section
@@ -214,15 +142,16 @@ export default function Landing() {
               title: "Ask the AI",
               body: "Chat in plain English. NetGuard reads patterns, flags suspicious activity, and recommends action.",
             },
-          ].map((s) => (
-            <div
+          ].map((s, i) => (
+            <RevealCard
               key={s.step}
+              delay={i * 0.08}
               className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 shadow-card backdrop-blur-xl"
             >
               <span className="font-mono text-[11px] font-semibold text-ng-teal">{s.step}</span>
               <h3 className="mt-3 text-[16px] font-semibold tracking-[-0.01em]">{s.title}</h3>
               <p className="mt-2 text-[13.5px] leading-relaxed text-ng-sub">{s.body}</p>
-            </div>
+            </RevealCard>
           ))}
         </div>
       </section>
@@ -233,9 +162,10 @@ export default function Landing() {
         className="relative z-10 mx-auto w-full max-w-[1080px] px-8 pb-8 scroll-mt-24"
       >
         <div className="grid gap-4 md:grid-cols-3">
-          {FEATURES.map((f) => (
-            <div
+          {FEATURES.map((f, i) => (
+            <RevealCard
               key={f.title}
+              delay={i * 0.08}
               className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-6 shadow-card backdrop-blur-xl transition hover:border-white/[0.12]"
             >
               <span className="grid h-11 w-11 place-items-center rounded-xl border border-ng-teal/20 bg-ng-teal/[0.08] text-ng-teal">
@@ -249,7 +179,7 @@ export default function Landing() {
               </span>
               <h3 className="mt-4 text-[16px] font-semibold tracking-[-0.01em]">{f.title}</h3>
               <p className="mt-2 text-[13.5px] leading-relaxed text-ng-sub">{f.body}</p>
-            </div>
+            </RevealCard>
           ))}
         </div>
       </section>
