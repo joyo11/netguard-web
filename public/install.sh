@@ -61,6 +61,7 @@ import json
 import os
 import re
 import socket
+import ssl
 import subprocess
 import sys
 import time
@@ -70,6 +71,25 @@ import urllib.request
 CONFIG_PATH = os.path.expanduser("~/.netguard/config")
 POLL_INTERVAL_SEC = 15
 HTTP_TIMEOUT_SEC = 10
+
+
+def _build_ssl_context():
+    """Workaround for macOS Python lacking a CA bundle. Try common system
+    cert locations; fall back to default if nothing's found."""
+    candidates = [
+        "/etc/ssl/cert.pem",                       # macOS (modern)
+        "/usr/local/etc/openssl/cert.pem",         # Homebrew Intel
+        "/opt/homebrew/etc/openssl@3/cert.pem",    # Homebrew Apple silicon
+        "/etc/ssl/certs/ca-certificates.crt",      # Debian/Ubuntu
+        "/etc/pki/tls/certs/ca-bundle.crt",        # RHEL/Fedora
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return ssl.create_default_context(cafile=p)
+    return ssl.create_default_context()
+
+
+SSL_CONTEXT = _build_ssl_context()
 
 
 def load_config():
@@ -162,7 +182,7 @@ def post_batch(endpoint, token, hostname, batch):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC) as resp:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC, context=SSL_CONTEXT) as resp:
             text = resp.read().decode()
             print(f"[netguard] posted {len(batch)} conns → {resp.status} {text}", flush=True)
     except urllib.error.HTTPError as e:
