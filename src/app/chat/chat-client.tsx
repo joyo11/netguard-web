@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import { SideNav } from "@/components/side-nav";
 import { MobileBar } from "@/components/mobile-bar";
+import { Markdown } from "@/components/markdown";
 import { Check, Collapse, Paperclip, Send, Spark } from "@/components/icons";
 
 export function ChatClient({ hostname }: { hostname: string | null }) {
@@ -167,36 +169,50 @@ function ChatPage({ hostname }: { hostname: string | null }) {
             ))}
 
             {(toolLabels.length > 0 || streaming) && (
-              <div className="flex gap-3 streamin">
+              <motion.div
+                className="flex gap-3"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, ease: [0.2, 0.8, 0.4, 1] }}
+              >
                 <Avatar />
                 <div className="min-w-0 flex-1 space-y-2.5">
                   {toolLabels.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
-                      {toolLabels.map((label, i) => (
-                        <span
-                          key={i}
-                          className="flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1 font-mono text-[11.5px] text-ng-sub"
-                        >
-                          {i === toolLabels.length - 1 && !streaming ? (
-                            <span className="h-3 w-3 rounded-full border-2 border-ng-teal/30 border-t-ng-teal animate-spin" />
-                          ) : (
-                            <Check className="h-3 w-3 text-ng-teal/70" />
-                          )}
-                          {label}
-                        </span>
-                      ))}
+                      <AnimatePresence initial={false}>
+                        {toolLabels.map((label, i) => (
+                          <motion.span
+                            key={`${i}-${label}`}
+                            initial={{ opacity: 0, scale: 0.92 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                            className="flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1 font-mono text-[11.5px] text-ng-sub"
+                          >
+                            {i === toolLabels.length - 1 && !streaming ? (
+                              <span className="h-3 w-3 rounded-full border-2 border-ng-teal/30 border-t-ng-teal animate-spin" />
+                            ) : (
+                              <Check className="h-3 w-3 text-ng-teal/70" />
+                            )}
+                            {label}
+                          </motion.span>
+                        ))}
+                      </AnimatePresence>
                     </div>
                   )}
                   {streaming && (
-                    <div className="space-y-3 rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5">
-                      <p className="text-[14px] leading-relaxed text-ng-ink/90 whitespace-pre-wrap">
-                        {streaming}
-                        <span className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse bg-ng-teal" />
-                      </p>
-                    </div>
+                    <motion.div
+                      className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Markdown>{streaming}</Markdown>
+                      <span className="-mt-1 ml-0.5 inline-block h-4 w-1.5 translate-y-1 animate-pulse bg-ng-teal" />
+                    </motion.div>
                   )}
                 </div>
-              </div>
+              </motion.div>
             )}
 
             {errorMsg && (
@@ -265,24 +281,32 @@ function ChatPage({ hostname }: { hostname: string | null }) {
 function MessageView({ m }: { m: Message }) {
   if (m.role === "user") {
     return (
-      <div className="flex justify-end">
+      <motion.div
+        className="flex justify-end"
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: [0.2, 0.8, 0.4, 1] }}
+      >
         <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/[0.07] px-4 py-2.5 text-[14px] leading-relaxed text-ng-ink">
           {m.content}
         </div>
-      </div>
+      </motion.div>
     );
   }
   return (
-    <div className="flex gap-3">
+    <motion.div
+      className="flex gap-3"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.2, 0.8, 0.4, 1] }}
+    >
       <Avatar />
       <div className="min-w-0 flex-1">
-        <div className="space-y-3 rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5">
-          <p className="text-[14px] leading-relaxed text-ng-ink/90 whitespace-pre-wrap">
-            {m.content}
-          </p>
+        <div className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5">
+          <Markdown>{m.content}</Markdown>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
