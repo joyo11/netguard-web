@@ -10,7 +10,7 @@ const ITEMS: { id: Exclude<Active, null>; href: string; icon: typeof Grid; label
 
 export function SideNav({ active }: { active: Active }) {
   return (
-    <nav className="sticky top-0 z-20 flex h-screen w-[72px] shrink-0 flex-col items-center border-r border-white/[0.06] bg-[#0a0d13]/60 py-5 backdrop-blur-xl">
+    <nav className="sticky top-0 z-20 hidden h-screen w-[72px] shrink-0 flex-col items-center border-r border-white/[0.06] bg-[#0a0d13]/60 py-5 backdrop-blur-xl md:flex">
       <Link
         href="/"
         title="NetGuard"

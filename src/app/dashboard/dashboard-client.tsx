@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SideNav } from "@/components/side-nav";
+import { MobileBar } from "@/components/mobile-bar";
 import {
   ArrowUpRight,
   ChevRight,
@@ -69,9 +70,10 @@ export function DashboardClient({
     <div className="grain ambient relative flex min-h-screen w-full">
       <SideNav active="dashboard" />
 
-      <div className="relative z-10 flex min-h-screen flex-1 overflow-hidden">
-        <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1280px] px-8 py-7">
+      <div className="relative z-10 flex min-h-screen flex-1 flex-col overflow-hidden md:flex-row">
+        <div className="flex flex-1 flex-col overflow-y-auto">
+          <MobileBar active="dashboard" />
+          <div className="mx-auto w-full max-w-[1280px] px-4 py-5 md:px-8 md:py-7">
             {/* header */}
             <div className="mb-6 flex items-center justify-between">
               <div>
@@ -136,12 +138,14 @@ export function DashboardClient({
           </div>
         </div>
 
-        {/* chat drawer */}
-        <ChatDrawerPanel
-          open={drawer}
-          onToggle={() => setDrawer((v) => !v)}
-          isOnboarding={!hasData}
-        />
+        {/* chat drawer — desktop only; mobile has a top-nav link to /chat */}
+        <div className="hidden md:flex">
+          <ChatDrawerPanel
+            open={drawer}
+            onToggle={() => setDrawer((v) => !v)}
+            isOnboarding={!hasData}
+          />
+        </div>
       </div>
     </div>
   );
@@ -201,6 +205,8 @@ function StatusBanner({ summary }: { summary: Summary }) {
 function FeedTable({ feed }: { feed: Connection[] }) {
   return (
     <div className="mt-6 overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] shadow-card backdrop-blur-xl">
+      <div className="overflow-x-auto">
+      <div className="min-w-[640px]">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
         <div className="flex items-center gap-2.5">
           <h2 className="text-[14px] font-semibold">Live activity</h2>
@@ -222,7 +228,7 @@ function FeedTable({ feed }: { feed: Connection[] }) {
         <span className="text-right">Status</span>
       </div>
 
-      <div>
+      <div className="divide-y divide-white/[0.04]">
         {feed.map((r, i) => {
           const m = STATE_META[r.state];
           return (
@@ -263,6 +269,8 @@ function FeedTable({ feed }: { feed: Connection[] }) {
             </div>
           );
         })}
+      </div>
+      </div>
       </div>
     </div>
   );

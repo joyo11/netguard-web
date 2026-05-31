@@ -24,6 +24,7 @@
 // }
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { classify } from "@/lib/classify";
 import { NextResponse, type NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -99,7 +100,13 @@ export async function POST(req: NextRequest) {
       port: typeof c.port === "number" ? c.port : null,
       bytes_out: typeof c.bytes_out === "number" ? c.bytes_out : 0,
       bytes_in: typeof c.bytes_in === "number" ? c.bytes_in : 0,
-      state: c.state === "watch" || c.state === "alert" ? c.state : "safe",
+      // Server-side classification — overrides whatever the agent sent.
+      state: classify({
+        remote_host: c.remote_host,
+        remote_ip: c.remote_ip,
+        port: c.port,
+        app: c.app,
+      }),
     }));
 
   if (rows.length === 0) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { SideNav } from "@/components/side-nav";
+import { MobileBar } from "@/components/mobile-bar";
 import { Check, Copy, Cross, Download } from "@/components/icons";
 
 const COLLECTED = [
@@ -97,8 +98,9 @@ export default function Settings() {
     <div className="grain ambient relative flex min-h-screen w-full">
       <SideNav active="settings" />
 
-      <div className="relative z-10 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[820px] px-8 py-9">
+      <div className="relative z-10 flex flex-1 flex-col overflow-y-auto">
+        <MobileBar active="settings" />
+        <div className="mx-auto w-full max-w-[820px] px-4 py-6 md:px-8 md:py-9">
           <h1 className="text-[22px] font-semibold tracking-[-0.02em]">Settings</h1>
           <p className="mt-0.5 text-[13px] text-ng-sub">
             Agent, privacy, and notifications for{" "}

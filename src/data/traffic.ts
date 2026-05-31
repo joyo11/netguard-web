@@ -3,6 +3,7 @@
 // Same shape as the old mock.ts so /api/chat tools didn't need rewriting.
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { humanizeApp } from "@/lib/humanize";
 
 export type ConnectionState = "safe" | "watch" | "alert";
 
@@ -34,8 +35,8 @@ function rowToConnection(r: DbRow): Connection {
   const total = (r.bytes_out ?? 0) + (r.bytes_in ?? 0);
   return {
     t: new Date(r.ts).toISOString().slice(11, 16), // HH:MM (UTC)
-    app: r.app ?? "unknown",
-    proc: r.proc ?? "",
+    app: humanizeApp(r.app),
+    proc: r.proc ?? r.app ?? "",
     host: r.remote_host ?? r.remote_ip ?? "",
     cc: r.cc ?? "··",
     port: r.port ?? 0,
