@@ -1,14 +1,18 @@
 "use client";
 
-// Auth page: Google OAuth (primary) + email/password (fallback).
-// Magic links were dropped earlier (rate limit). Password form added
-// per Vinod's pivot when Google OAuth got stuck.
+// Auth — v3 port. One screen with three modes:
+//   1. Sign in (email + password)
+//   2. Create account (email + password + confirm)
+//   3. Forgot password (email-only, triggers Supabase reset email)
+// Google OAuth is the primary CTA on all three.
 
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Shield } from "@/components/icons";
 import { createClient } from "@/lib/supabase/browser";
+import { Aurora, WordmarkV3 } from "@/components/v3";
+
+type Mode = "signin" | "signup" | "forgot";
 
 export default function LoginPage() {
   return (
@@ -23,14 +27,25 @@ function LoginInner() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/dashboard";
   const initialError = searchParams.get("error");
+
+  const [mode, setMode] = useState<Mode>("signin");
   const [pending, setPending] = useState<"google" | "password" | null>(null);
   const [error, setError] = useState<string | null>(initialError);
+  const [info, setInfo] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  const switchTo = (m: Mode) => {
+    setMode(m);
+    setError(null);
+    setInfo(null);
+  };
 
   async function signInWithGoogle() {
     if (pending) return;
     setError(null);
+    setInfo(null);
     setPending("google");
     const supabase = createClient();
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -44,126 +59,272 @@ function LoginInner() {
     }
   }
 
-  async function signInWithPassword(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (pending) return;
     setError(null);
+    setInfo(null);
     setPending("password");
     const supabase = createClient();
-    const { error: err } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    if (err) {
+
+    try {
+      if (mode === "signin") {
+        const { error: err } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (err) throw err;
+        router.push(next);
+        router.refresh();
+        return;
+      }
+      if (mode === "signup") {
+        if (password.length < 8) {
+          throw new Error("Password must be at least 8 characters.");
+        }
+        if (password !== confirm) {
+          throw new Error("Passwords don't match.");
+        }
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const { error: err, data } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` },
+        });
+        if (err) throw err;
+        // If email confirmation is on, there's no session yet — tell the user.
+        if (!data.session) {
+          setInfo("Check your inbox to confirm your email, then sign in.");
+          setMode("signin");
+        } else {
+          router.push(next);
+          router.refresh();
+        }
+        return;
+      }
+      // forgot
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/settings")}`,
+      });
+      if (err) throw err;
+      setInfo("Reset link sent. Check your inbox.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
       setPending(null);
-      setError(err.message);
-      return;
     }
-    router.push(next);
-    router.refresh();
   }
 
+  const title =
+    mode === "signin" ? "Sign in to NetGuard"
+      : mode === "signup" ? "Create your NetGuard account"
+        : "Reset your password";
+  const subtitle =
+    mode === "signin" ? "One click with Google, or use your email and password."
+      : mode === "signup" ? "Free, open source, runs on your machine. No card required."
+        : "We'll email you a link to set a new password.";
+
   return (
-    <div className="grain ambient relative min-h-screen w-full overflow-hidden">
-      <header className="relative z-10 mx-auto flex w-full max-w-[1280px] items-center justify-between px-8 py-6">
-        <Link href="/" className="flex items-center gap-2.5">
-          <Shield className="h-7 w-7" />
-          <span className="text-[16px] font-semibold tracking-[-0.01em]">NetGuard</span>
+    <div className="ng-scroll relative min-h-screen w-full overflow-y-auto bg-pitch font-display text-cream antialiased">
+      <Aurora className="!h-[640px]" />
+
+      <header className="relative z-10 mx-auto flex w-full max-w-[1180px] items-center justify-between px-5 py-5 sm:px-8">
+        <Link href="/" className="ng-focus rounded">
+          <WordmarkV3 />
+        </Link>
+        <Link
+          href="/"
+          className="ng-focus rounded-lg px-3.5 py-2 text-[13.5px] text-cream/55 transition-colors hover:text-cream"
+        >
+          ← Back
         </Link>
       </header>
 
-      <main className="relative z-10 flex min-h-[calc(100vh-88px)] items-center justify-center px-6 pb-24">
-        <div className="w-full max-w-[400px]">
-          <div className="relative rounded-[20px] border border-white/[0.07] bg-white/[0.025] p-7 shadow-card backdrop-blur-xl">
-            <div className="pointer-events-none absolute inset-x-7 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+      <main className="relative z-10 mx-auto flex w-full max-w-[440px] flex-col items-stretch px-5 pb-20 pt-6 sm:px-8 sm:pt-14">
+        <div className="ng-rise ng-bubble-ai rounded-2xl p-7">
+          <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-cream">{title}</h1>
+          <p className="mt-1.5 text-[13.5px] leading-relaxed text-cream/55">{subtitle}</p>
 
-            <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ng-ink">
-              Sign in to NetGuard
-            </h1>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ng-sub">
-              One click with Google, or use your email and password.
-            </p>
-
-            <button
-              onClick={signInWithGoogle}
-              disabled={pending !== null}
-              className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl bg-white py-3 text-[14px] font-semibold text-[#1f2024] transition hover:bg-white/95 disabled:opacity-60"
-            >
-              {pending === "google" ? (
-                <>
-                  <span className="h-4 w-4 rounded-full border-2 border-[#1f2024]/30 border-t-[#1f2024] animate-spin" />
-                  Opening Google…
-                </>
-              ) : (
-                <>
-                  <GoogleMark className="h-[18px] w-[18px]" />
-                  Continue with Google
-                </>
-              )}
-            </button>
-
-            <div className="my-5 flex items-center gap-3">
-              <span className="h-px flex-1 bg-white/[0.07]" />
-              <span className="text-[11px] uppercase tracking-[0.18em] text-ng-faint">or</span>
-              <span className="h-px flex-1 bg-white/[0.07]" />
-            </div>
-
-            <form onSubmit={signInWithPassword} className="space-y-3">
-              <input
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full rounded-xl border border-white/[0.09] bg-[#0a0d13] px-3.5 py-3 text-[14px] text-ng-ink placeholder:text-ng-faint focus:border-ng-teal/40 focus:outline-none"
-              />
-              <input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full rounded-xl border border-white/[0.09] bg-[#0a0d13] px-3.5 py-3 text-[14px] text-ng-ink placeholder:text-ng-faint focus:border-ng-teal/40 focus:outline-none"
-              />
+          {mode !== "forgot" && (
+            <>
               <button
-                type="submit"
+                onClick={signInWithGoogle}
                 disabled={pending !== null}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-ng-teal py-3 text-[14px] font-semibold text-ng-canvas shadow-glow transition hover:bg-ng-teal/90 disabled:opacity-60"
+                className="ng-focus mt-6 flex w-full items-center justify-center gap-3 rounded-xl bg-cream py-3 text-[14px] font-semibold text-pitch transition hover:bg-cream/95 disabled:opacity-60"
               >
-                {pending === "password" ? (
+                {pending === "google" ? (
                   <>
-                    <span className="h-4 w-4 rounded-full border-2 border-ng-canvas/30 border-t-ng-canvas animate-spin" />
-                    Signing in…
+                    <Spinner className="text-pitch" />
+                    Opening Google…
                   </>
                 ) : (
-                  "Sign in with email"
+                  <>
+                    <GoogleMark className="h-[18px] w-[18px]" />
+                    Continue with Google
+                  </>
                 )}
               </button>
-            </form>
 
-            {error && (
-              <p className="mt-4 rounded-lg border border-ng-red/20 bg-ng-red/[0.06] px-3 py-2 text-[12.5px] text-ng-red">
-                {error}
-              </p>
+              <div className="my-5 flex items-center gap-3">
+                <span className="h-px flex-1 bg-cream/[0.08]" />
+                <span className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-cream/35">
+                  or
+                </span>
+                <span className="h-px flex-1 bg-cream/[0.08]" />
+              </div>
+            </>
+          )}
+
+          <form onSubmit={submit} className="space-y-3">
+            <Input
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={setEmail}
+              placeholder="you@example.com"
+            />
+            {mode !== "forgot" && (
+              <Input
+                type="password"
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                required
+                value={password}
+                onChange={setPassword}
+                placeholder={mode === "signup" ? "Pick a password (8+ chars)" : "Password"}
+              />
+            )}
+            {mode === "signup" && (
+              <Input
+                type="password"
+                autoComplete="new-password"
+                required
+                value={confirm}
+                onChange={setConfirm}
+                placeholder="Confirm password"
+              />
             )}
 
-            <p className="mt-5 text-center text-[11.5px] leading-relaxed text-ng-faint">
-              We never see your Google password. We only get your email so we can attach your
-              network data to your account.
-            </p>
-          </div>
+            <button
+              type="submit"
+              disabled={pending !== null}
+              className="ng-focus flex w-full items-center justify-center gap-2 rounded-xl bg-teal py-3 text-[14px] font-semibold text-pitch shadow-[0_12px_36px_-12px_rgba(61,220,151,0.6)] transition hover:bg-teal/90 disabled:opacity-60"
+            >
+              {pending === "password" ? (
+                <>
+                  <Spinner className="text-pitch" />
+                  {mode === "signin" ? "Signing in…" : mode === "signup" ? "Creating…" : "Sending…"}
+                </>
+              ) : mode === "signin" ? (
+                "Sign in"
+              ) : mode === "signup" ? (
+                "Create account"
+              ) : (
+                "Send reset link"
+              )}
+            </button>
+          </form>
 
-          <p className="mt-5 text-center text-[12px] text-ng-faint">
-            New here?{" "}
-            <Link href="/" className="text-ng-sub hover:text-ng-ink">
-              See what NetGuard does
-            </Link>
-          </p>
+          {error && (
+            <p className="mt-4 rounded-lg border border-danger/30 bg-danger/[0.06] px-3 py-2 text-[12.5px] text-danger">
+              {error}
+            </p>
+          )}
+          {info && (
+            <p className="mt-4 rounded-lg border border-teal/25 bg-teal/[0.06] px-3 py-2 text-[12.5px] text-cream/80">
+              {info}
+            </p>
+          )}
+
+          {/* Mode-switch links */}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 text-[12.5px]">
+            {mode === "signin" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => switchTo("forgot")}
+                  className="ng-focus rounded text-cream/55 transition-colors hover:text-cream"
+                >
+                  Forgot password?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchTo("signup")}
+                  className="ng-focus rounded text-cream/70 transition-colors hover:text-cream"
+                >
+                  Create an account →
+                </button>
+              </>
+            )}
+            {mode === "signup" && (
+              <>
+                <span className="text-cream/45">Already have one?</span>
+                <button
+                  type="button"
+                  onClick={() => switchTo("signin")}
+                  className="ng-focus rounded text-cream/70 transition-colors hover:text-cream"
+                >
+                  Sign in →
+                </button>
+              </>
+            )}
+            {mode === "forgot" && (
+              <button
+                type="button"
+                onClick={() => switchTo("signin")}
+                className="ng-focus rounded text-cream/55 transition-colors hover:text-cream"
+              >
+                ← Back to sign in
+              </button>
+            )}
+          </div>
         </div>
+
+        <p className="mt-5 text-center text-[11.5px] leading-relaxed text-cream/40">
+          We only see your email so we can attach your network data to your account. Your Google
+          password never reaches us.
+        </p>
       </main>
     </div>
+  );
+}
+
+function Input({
+  type,
+  value,
+  onChange,
+  placeholder,
+  required,
+  autoComplete,
+}: {
+  type: "email" | "password";
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  autoComplete?: string;
+}) {
+  return (
+    <input
+      type={type}
+      required={required}
+      autoComplete={autoComplete}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="ng-focus w-full rounded-xl border border-cream/10 bg-[#0a0d13] px-3.5 py-3 text-[14px] text-cream placeholder:text-cream/35 focus:border-teal/40 focus:outline-none"
+    />
+  );
+}
+
+function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={
+        "h-4 w-4 rounded-full border-2 border-current/30 border-t-current animate-spin " + className
+      }
+    />
   );
 }
 
