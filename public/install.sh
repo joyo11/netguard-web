@@ -134,9 +134,13 @@ def parse_lsof():
         if len(parts) < 9:
             continue
         proc = parts[0]
-        name = parts[-1]  # NAME column at end
-        # NAME like: "192.168.1.5:50123->142.250.1.5:443 (ESTABLISHED)"
-        if "->" not in name:
+        # NAME column: on macOS lsof emits "addr -> addr (ESTABLISHED)" as
+        # space-separated fields, so parts[-1] is "(ESTABLISHED)" and the
+        # address with the "->" lives at parts[8]. On Linux the "(ESTABLISHED)"
+        # gets glued to the address. Pick whichever trailing field has "->"
+        # so both shapes work.
+        name = next((p for p in parts[8:] if "->" in p), None)
+        if not name:
             continue
         try:
             _local, remote_part = name.split("->", 1)
