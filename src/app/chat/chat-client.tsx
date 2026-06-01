@@ -66,7 +66,24 @@ function ChatPage({ hostname }: { hostname: string | null }) {
     const nextThread: Message[] = [...thread, { role: "user", content: text }];
     setThread(nextThread);
 
-    let accumulated = "";
+    // Typewriter buffer: server text arrives in word-sized chunks; we
+    // reveal it char-by-char at a steady cadence so the bubble actually
+    // *types*. `target` is what we've received, `shown` is what's
+    // currently rendered. The interval closes the gap.
+    let target = "";
+    let shown = "";
+    let streamDone = false;
+
+    const TYPE_MS = 16;
+    const typer = setInterval(() => {
+      if (shown.length >= target.length) return;
+      const gap = target.length - shown.length;
+      // Stay one char at a time until we're more than ~80 chars behind;
+      // then catch up proportionally so we never lag forever.
+      const step = gap > 80 ? Math.ceil(gap / 30) : 1;
+      shown = target.slice(0, shown.length + step);
+      setStreaming(shown);
+    }, TYPE_MS);
 
     try {
       const res = await fetch("/api/chat", {
@@ -99,8 +116,7 @@ function ChatPage({ hostname }: { hostname: string | null }) {
             continue;
           }
           if (evt.type === "text") {
-            accumulated += evt.delta;
-            setStreaming(accumulated);
+            target += evt.delta;
           } else if (evt.type === "tool_start") {
             setToolLabels((labels) => [...labels, evt.label]);
           } else if (evt.type === "error") {
@@ -110,11 +126,28 @@ function ChatPage({ hostname }: { hostname: string | null }) {
         }
       }
 
-      if (accumulated) setThread((t) => [...t, { role: "assistant", content: accumulated }]);
+      streamDone = true;
+
+      // Wait for the typewriter to finish revealing the last chars before
+      // we flip the bubble from "streaming preview" to a committed thread
+      // message — otherwise the user sees a jump from mid-sentence to full.
+      await new Promise<void>((resolve) => {
+        const check = setInterval(() => {
+          if (shown.length >= target.length) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 30);
+      });
+
+      if (target) setThread((t) => [...t, { role: "assistant", content: target }]);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
-      setStreaming("");
+      clearInterval(typer);
+      // If we bailed early (error path), don't leave a half-typed bubble.
+      if (!streamDone) setStreaming("");
+      else setStreaming("");
       setToolLabels([]);
       setPending(false);
     }
@@ -179,7 +212,7 @@ function ChatPage({ hostname }: { hostname: string | null }) {
 
 /* ─── EMPTY STATE — typewriter greeting + suggestion chips ─── */
 function Empty({ onPick }: { onPick: (q: string) => void }) {
-  const greeting = "Hey — I'm watching your network.";
+  const greeting = "Hey, I'm watching your network.";
   const [out, setOut] = useState("");
   const [done, setDone] = useState(false);
   const [showChips, setShowChips] = useState(false);
