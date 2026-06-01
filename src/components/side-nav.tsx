@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { NetGuardGlyph } from "@/components/v3";
+import { AccountMenu } from "@/components/account-menu";
 
 type Active = "dashboard" | "chat" | "settings" | null;
 
@@ -49,12 +50,7 @@ export function SideNav({ active, email = "" }: { active: Active; email?: string
           );
         })}
       </nav>
-      <button
-        className="ng-focus grid h-9 w-9 place-items-center rounded-full bg-teal/15 text-[13px] font-semibold text-teal"
-        aria-label="Account"
-      >
-        {email ? email[0]?.toUpperCase() : "?"}
-      </button>
+      <AccountMenu email={email} />
     </aside>
   );
 }

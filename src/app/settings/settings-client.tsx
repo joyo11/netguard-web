@@ -30,6 +30,7 @@ export function SettingsClient({ email }: { email: string }) {
             <PrivacyCard delay={100} />
             <NotificationsCard delay={160} />
             <TokenCard delay={220} />
+            <AccountCard delay={280} email={email} />
           </div>
         </div>
       </main>
@@ -319,6 +320,38 @@ function TokenCard({ delay }: { delay: number }) {
         Rotating immediately invalidates the current token — your agent will disconnect until you
         paste the new one into its config.
       </p>
+    </Card>
+  );
+}
+
+/* ────────── ACCOUNT ────────── */
+
+function AccountCard({ delay, email }: { delay: number; email: string }) {
+  return (
+    <Card title="Account" desc="Sign out of this browser" delay={delay}>
+      <Row last>
+        <RowText
+          title={email || "Signed in"}
+          sub="You can sign back in anytime. Your traffic data stays in your account."
+        />
+        <form action="/auth/signout" method="post">
+          <button
+            type="submit"
+            className="ng-focus flex items-center gap-2 rounded-lg border border-cream/12 bg-cream/[0.04] px-3.5 py-2.5 text-[13px] text-cream/80 transition-colors hover:bg-cream/[0.08]"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-cream/55">
+              <path
+                d="M14 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2M10 12h11m0 0-3-3m3 3-3 3"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Sign out
+          </button>
+        </form>
+      </Row>
     </Card>
   );
 }
