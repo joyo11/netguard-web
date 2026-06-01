@@ -1,28 +1,21 @@
 "use client";
 
+// Chat — Variant B (Expressive) ported from the v3 design package.
+// Real Supabase auth + real Claude API + real DB queries underneath.
+// Visual layer: aurora, AvatarB, typewriter cursor, shimmer tool pills,
+// particle burst on completion, glow-on-done bubble.
+
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
-import { SideNav } from "@/components/side-nav";
 import { MobileBar } from "@/components/mobile-bar";
 import { Markdown } from "@/components/markdown";
-import { Check, Collapse, Paperclip, Send, Spark } from "@/components/icons";
-
-export function ChatClient({ hostname }: { hostname: string | null }) {
-  return <ChatPage hostname={hostname} />;
-}
+import { Aurora, AvatarB, NetGuardGlyph, Particles } from "@/components/v3";
 
 type Message = { role: "user" | "assistant"; content: string };
 
-const SEED_THREAD: Message[] = [
-  {
-    role: "assistant",
-    content:
-      "Hey — I'm watching your network. Ask me what's happening, what's been suspicious, or what a specific connection is up to. I'll pull real numbers and explain plainly.",
-  },
-];
+const SEED_THREAD: Message[] = [];
 
-const FOLLOWUP_PROMPTS = [
+const SUGGESTIONS = [
   "What's been happening today?",
   "Anything suspicious right now?",
   "Why is my laptop talking to RO?",
@@ -35,28 +28,27 @@ type StreamEvent =
   | { type: "done" }
   | { type: "error"; message: string };
 
+export function ChatClient({ hostname }: { hostname: string | null }) {
+  return <ChatPage hostname={hostname} />;
+}
+
 function ChatPage({ hostname }: { hostname: string | null }) {
   const [thread, setThread] = useState<Message[]>(SEED_THREAD);
   const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState<string>(""); // partial assistant text
-  const [toolLabels, setToolLabels] = useState<string[]>([]); // active tool indicators
+  const [streaming, setStreaming] = useState<string>("");
+  const [toolLabels, setToolLabels] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [glowKey, setGlowKey] = useState(0); // bumps each time the AI finishes
-  const scroller = useRef<HTMLDivElement>(null);
+  const [glowKey, setGlowKey] = useState(0);
+  const scroller = useRef<HTMLElement>(null);
   const prevPendingRef = useRef(false);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: 999999, behavior: "smooth" });
   }, [thread, streaming, toolLabels]);
 
-  // Aaron's "AI moment" — when a response finishes, briefly glow the last
-  // assistant message's border. Bump glowKey so framer re-runs the animation
-  // even if the previous glow's still mid-flight.
   useEffect(() => {
-    if (prevPendingRef.current && !pending) {
-      setGlowKey((k) => k + 1);
-    }
+    if (prevPendingRef.current && !pending) setGlowKey((k) => k + 1);
     prevPendingRef.current = pending;
   }, [pending]);
 
@@ -82,10 +74,7 @@ function ChatPage({ hostname }: { hostname: string | null }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: nextThread }),
       });
-
-      if (!res.ok || !res.body) {
-        throw new Error(`Request failed: ${res.status}`);
-      }
+      if (!res.ok || !res.body) throw new Error(`Request failed: ${res.status}`);
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -94,10 +83,7 @@ function ChatPage({ hostname }: { hostname: string | null }) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
-
-        // SSE messages are separated by \n\n
         const parts = buffer.split("\n\n");
         buffer = parts.pop() ?? "";
 
@@ -106,36 +92,27 @@ function ChatPage({ hostname }: { hostname: string | null }) {
           if (!line) continue;
           const payload = line.slice(6).trim();
           if (!payload) continue;
-
           let evt: StreamEvent;
           try {
             evt = JSON.parse(payload) as StreamEvent;
           } catch {
             continue;
           }
-
           if (evt.type === "text") {
             accumulated += evt.delta;
             setStreaming(accumulated);
           } else if (evt.type === "tool_start") {
             setToolLabels((labels) => [...labels, evt.label]);
-          } else if (evt.type === "tool_done") {
-            // keep them visible — they fade with the final answer
           } else if (evt.type === "error") {
             setErrorMsg(evt.message);
             break;
-          } else if (evt.type === "done") {
-            // committed below after loop
           }
         }
       }
 
-      if (accumulated) {
-        setThread((t) => [...t, { role: "assistant", content: accumulated }]);
-      }
+      if (accumulated) setThread((t) => [...t, { role: "assistant", content: accumulated }]);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setErrorMsg(message);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setStreaming("");
       setToolLabels([]);
@@ -143,263 +120,362 @@ function ChatPage({ hostname }: { hostname: string | null }) {
     }
   }
 
+  const empty = thread.length === 0 && !pending && !streaming;
+
   return (
-    <div className="grain ambient relative flex min-h-screen w-full">
-      <SideNav active={null} />
+    <div className="relative flex h-full min-h-screen flex-col overflow-hidden bg-pitch text-cream font-display antialiased">
+      <Aurora />
+      <MobileBar active="chat" />
 
-      <div className="relative z-10 flex min-h-screen flex-1 flex-col">
-        <MobileBar active="chat" />
-        {/* header — single tight line, custom glyph (per Aaron) */}
-        <header className="hidden items-center justify-between border-b border-white/[0.06] bg-[#0a0d13]/50 px-7 py-3 backdrop-blur-xl md:flex">
-          <div className="flex items-center gap-2.5">
-            <AiGlyph />
-            <h1 className="text-[13.5px] font-semibold tracking-[-0.01em] text-ng-ink">
-              NetGuard
-            </h1>
-            <span className="text-[11px] text-ng-faint">·</span>
-            <p className="flex items-center gap-1.5 text-[11.5px] text-ng-faint">
-              <span className="relative grid h-1.5 w-1.5 place-items-center">
-                <span className="absolute h-1.5 w-1.5 rounded-full bg-ng-teal/70 pulse-ring" />
-                <span className="h-1.5 w-1.5 rounded-full bg-ng-teal" />
-              </span>
-              {hostname ? hostname : "awaiting agent"}
-            </p>
+      {/* desktop header */}
+      <header className="ng-rise relative z-10 hidden items-center justify-between px-6 py-4 sm:px-8 md:flex">
+        <div className="flex items-center gap-3">
+          <AvatarB size={30} />
+          <div className="leading-tight">
+            <div className="flex items-center gap-2 text-[14px] font-semibold tracking-tight">
+              NetGuard AI
+            </div>
           </div>
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[12px] text-ng-sub transition hover:bg-white/[0.06] hover:text-ng-ink"
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-cream/10 bg-cream/[0.03] px-3 py-1.5 text-[12px] text-cream/55">
+          <span className="h-1.5 w-1.5 rounded-full bg-teal ng-livedot" />
+          <span className="font-mono">{hostname ?? "awaiting agent"}</span>
+        </div>
+      </header>
+
+      <main ref={scroller} className="ng-scroll relative z-10 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[720px] px-5 sm:px-8">
+          {empty ? (
+            <Empty onPick={ask} />
+          ) : (
+            <Thread
+              thread={thread}
+              streaming={streaming}
+              toolLabels={toolLabels}
+              pending={pending}
+              glowKey={glowKey}
+            />
+          )}
+          {errorMsg && (
+            <div className="mb-6 rounded-xl border border-danger/30 bg-danger/[0.08] px-4 py-3 text-[13px] text-danger">
+              {errorMsg.includes("ANTHROPIC_API_KEY")
+                ? "Chat isn't connected yet — server is missing ANTHROPIC_API_KEY."
+                : `Something went wrong: ${errorMsg}`}
+            </div>
+          )}
+        </div>
+      </main>
+
+      <Composer
+        input={input}
+        setInput={setInput}
+        pending={pending}
+        empty={empty}
+        onSubmit={() => ask(input)}
+      />
+    </div>
+  );
+}
+
+/* ─── EMPTY STATE — typewriter greeting + suggestion chips ─── */
+function Empty({ onPick }: { onPick: (q: string) => void }) {
+  const greeting = "Hey — I'm watching your network.";
+  const [out, setOut] = useState("");
+  const [done, setDone] = useState(false);
+  const [showChips, setShowChips] = useState(false);
+
+  useEffect(() => {
+    const reduced =
+      typeof matchMedia !== "undefined" &&
+      matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      setOut(greeting);
+      setDone(true);
+      setShowChips(true);
+      return;
+    }
+    setOut("");
+    setDone(false);
+    setShowChips(false);
+    let i = 0;
+    const id = setInterval(() => {
+      const step = greeting[i] === " " ? 2 : 1;
+      i = Math.min(greeting.length, i + step);
+      setOut(greeting.slice(0, i));
+      if (i >= greeting.length) {
+        clearInterval(id);
+        setDone(true);
+        setTimeout(() => setShowChips(true), 200);
+      }
+    }, 38);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+      <div className="relative mb-7 ng-pop">
+        <AvatarB size={62} thinking={!done} />
+        {done && <Particles origin="center" />}
+      </div>
+      <h1 className="min-h-[1.2em] text-[clamp(26px,4vw,40px)] font-semibold leading-tight tracking-[-0.025em]">
+        {out}
+        {!done && (
+          <span className="ml-0.5 inline-block h-[0.95em] w-[3px] translate-y-[0.12em] rounded-full bg-teal align-middle ng-caret" />
+        )}
+      </h1>
+      <p className="mx-auto mt-4 max-w-[430px] text-[15px] leading-relaxed text-cream/55">
+        Ask anything about what your machine is doing online. I&apos;ll pull real
+        numbers and explain them plainly.
+      </p>
+      <div
+        className={
+          "mt-9 flex flex-wrap justify-center gap-2.5 transition-all duration-500 " +
+          (showChips ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3")
+        }
+      >
+        {SUGGESTIONS.map((s, i) => (
+          <button
+            key={s}
+            onClick={() => onPick(s)}
+            style={{ transitionDelay: `${i * 70}ms` }}
+            className="ng-focus group flex items-center gap-2 rounded-full border border-cream/12 bg-cream/[0.04] px-4 py-2 text-[13.5px] text-cream/75 transition-all hover:border-teal/40 hover:bg-teal/[0.08] hover:text-cream"
           >
-            <Collapse className="h-3.5 w-3.5" /> Collapse
-          </Link>
-        </header>
-
-        {/* thread */}
-        <div ref={scroller} className="flex-1 overflow-y-auto px-6 py-8">
-          <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
-            {thread.map((m, i) => {
-              const isLastAssistant =
-                i === thread.length - 1 && m.role === "assistant";
-              return (
-                <MessageView
-                  key={i}
-                  m={m}
-                  glowKey={isLastAssistant ? glowKey : 0}
-                />
-              );
-            })}
-
-            {(toolLabels.length > 0 || streaming) && (
-              <motion.div
-                className="flex gap-3"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: [0.2, 0.8, 0.4, 1] }}
-              >
-                <Avatar />
-                <div className="min-w-0 flex-1 space-y-2.5">
-                  {toolLabels.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      <AnimatePresence initial={false}>
-                        {toolLabels.map((label, i) => (
-                          <motion.span
-                            key={`${i}-${label}`}
-                            initial={{ opacity: 0, scale: 0.92 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.2, ease: "easeOut" }}
-                            className="flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1 font-mono text-[11.5px] text-ng-sub"
-                          >
-                            {i === toolLabels.length - 1 && !streaming ? (
-                              <span className="h-3 w-3 rounded-full border-2 border-ng-teal/30 border-t-ng-teal animate-spin" />
-                            ) : (
-                              <Check className="h-3 w-3 text-ng-teal/70" />
-                            )}
-                            {label}
-                          </motion.span>
-                        ))}
-                      </AnimatePresence>
-                    </div>
-                  )}
-                  {streaming && (
-                    <motion.div
-                      className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <Markdown>{streaming}</Markdown>
-                      <span className="-mt-1 ml-0.5 inline-block h-4 w-1.5 translate-y-1 animate-pulse bg-ng-teal" />
-                    </motion.div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-
-            {errorMsg && (
-              <div className="rounded-xl border border-ng-red/20 bg-ng-red/[0.06] px-4 py-3 text-[13px] text-ng-red">
-                {errorMsg.includes("ANTHROPIC_API_KEY")
-                  ? "Chat isn't connected yet — server is missing ANTHROPIC_API_KEY."
-                  : `Something went wrong: ${errorMsg}`}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* composer */}
-        <div
-          className="border-t border-white/[0.06] bg-[#0a0d13]/50 px-4 py-4 backdrop-blur-xl md:px-6"
-          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
-        >
-          <div className="mx-auto w-full max-w-[720px]">
-            <div className="mb-3 flex flex-wrap gap-2">
-              {FOLLOWUP_PROMPTS.map((p) => (
-                <button
-                  key={p}
-                  onClick={() => ask(p)}
-                  disabled={pending}
-                  className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3.5 py-1.5 text-[12.5px] text-ng-sub transition hover:border-ng-teal/30 hover:bg-ng-teal/[0.06] hover:text-ng-ink disabled:opacity-40"
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-end gap-2.5 rounded-2xl border border-white/[0.09] bg-[#0a0d13] px-3.5 py-3 focus-within:border-ng-teal/30">
-              <button
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/[0.08] text-ng-faint transition hover:text-ng-sub"
-                title="Include a connection"
-              >
-                <Paperclip className="h-4 w-4" />
-              </button>
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    ask(input);
-                  }
-                }}
-                disabled={pending}
-                className="min-w-0 flex-1 bg-transparent py-1 text-[14px] text-ng-ink placeholder:text-ng-faint focus:outline-none disabled:opacity-50"
-                placeholder="Ask about a connection, process, or host…"
-              />
-              <button
-                onClick={() => ask(input)}
-                disabled={pending || !input.trim()}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-ng-teal text-ng-canvas transition hover:bg-ng-teal/90 disabled:opacity-40"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            </div>
-            <p className="mt-2 px-1 text-center text-[11px] text-ng-faint">
-              NetGuard reads metadata only — it can explain and recommend, but won&apos;t act without your go-ahead.
-            </p>
-          </div>
-        </div>
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-teal/70 transition-transform group-hover:scale-110">
+              <path d="M12 3l1.4 4.1L17.5 8.5 13.4 9.9 12 14l-1.4-4.1L6.5 8.5l4.1-1.4L12 3Z" fill="currentColor" />
+            </svg>
+            {s}
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
-function MessageView({ m, glowKey }: { m: Message; glowKey: number }) {
+/* ─── THREAD ─── */
+function Thread({
+  thread,
+  streaming,
+  toolLabels,
+  pending,
+  glowKey,
+}: {
+  thread: Message[];
+  streaming: string;
+  toolLabels: string[];
+  pending: boolean;
+  glowKey: number;
+}) {
+  return (
+    <div className="py-7 sm:py-9">
+      {thread.map((m, i) => {
+        const isLastAssistant = i === thread.length - 1 && m.role === "assistant";
+        return (
+          <MessageView
+            key={i}
+            m={m}
+            glowKey={isLastAssistant ? glowKey : 0}
+            delay={Math.min(i * 40, 200)}
+          />
+        );
+      })}
+
+      {(toolLabels.length > 0 || streaming || pending) && (
+        <Assistant thinking={pending && !streaming} delay={0}>
+          {toolLabels.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {toolLabels.map((label, idx) => (
+                <ToolPill
+                  key={`${idx}-${label}`}
+                  label={label}
+                  state={idx === toolLabels.length - 1 && !streaming ? "running" : "done"}
+                />
+              ))}
+            </div>
+          )}
+          {streaming && (
+            <div className="text-[15.5px] leading-[1.65] text-cream/90">
+              <Markdown>{streaming}</Markdown>
+              <span className="ml-0.5 inline-block h-[1.05em] w-[2.5px] translate-y-[0.15em] rounded-full bg-teal align-middle ng-caret" />
+            </div>
+          )}
+        </Assistant>
+      )}
+    </div>
+  );
+}
+
+function MessageView({
+  m,
+  glowKey,
+  delay,
+}: {
+  m: Message;
+  glowKey: number;
+  delay: number;
+}) {
   if (m.role === "user") {
     return (
-      <motion.div
-        className="flex justify-end"
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: [0.2, 0.8, 0.4, 1] }}
-      >
-        <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/[0.07] px-4 py-2.5 text-[14px] leading-relaxed text-ng-ink">
+      <div className="ng-rise mb-7 flex justify-end" style={{ animationDelay: `${delay}ms` }}>
+        <div className="max-w-[80%] rounded-2xl rounded-tr-md border border-cream/[0.08] bg-cream/[0.05] px-4 py-2.5 text-[15.5px] leading-relaxed text-cream/90">
           {m.content}
         </div>
-      </motion.div>
+      </div>
     );
   }
   return (
-    <motion.div
-      className="flex gap-3"
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: [0.2, 0.8, 0.4, 1] }}
-    >
-      <Avatar />
-      <div className="min-w-0 flex-1">
-        <motion.div
-          // Glow on completion. key changes each time the AI finishes, which
-          // re-runs the animation. boxShadow goes through 0 → bright → 0.
-          key={`bubble-${glowKey}`}
-          className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.03] px-4 py-3.5"
-          initial={false}
-          animate={
-            glowKey > 0
-              ? {
-                  boxShadow: [
-                    "0 0 0 0 rgba(61,220,151,0)",
-                    "0 0 24px 0 rgba(61,220,151,0.45)",
-                    "0 0 16px 0 rgba(61,220,151,0.25)",
-                    "0 0 0 0 rgba(61,220,151,0)",
-                  ],
-                  borderColor: [
-                    "rgba(255,255,255,0.07)",
-                    "rgba(61,220,151,0.5)",
-                    "rgba(61,220,151,0.3)",
-                    "rgba(255,255,255,0.07)",
-                  ],
-                }
-              : undefined
-          }
-          transition={{ duration: 1.4, ease: "easeInOut", times: [0, 0.2, 0.5, 1] }}
-        >
+    <Assistant delay={delay} complete={glowKey > 0}>
+      <div
+        key={`bubble-${glowKey}`}
+        className={glowKey > 0 ? "ng-glow-done rounded-2xl" : ""}
+      >
+        <div className="text-[15.5px] leading-[1.65] text-cream/90">
           <Markdown>{m.content}</Markdown>
-        </motion.div>
+        </div>
       </div>
-    </motion.div>
+    </Assistant>
   );
 }
 
-function Avatar() {
+function Assistant({
+  children,
+  thinking,
+  complete,
+  delay = 0,
+}: {
+  children: React.ReactNode;
+  thinking?: boolean;
+  complete?: boolean;
+  delay?: number;
+}) {
   return (
-    <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-ng-teal/30 to-emerald-700/20 text-ng-teal shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_8px_-2px_rgba(61,220,151,0.25)]">
-      <AiGlyphSmall />
+    <div
+      className="ng-rise relative mb-7 flex gap-3.5"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className="relative pt-0.5">
+        <AvatarB size={34} thinking={thinking} />
+        {complete && <Particles origin="avatar" />}
+      </div>
+      <div className="min-w-0 flex-1 pt-0.5">{children}</div>
+    </div>
+  );
+}
+
+function ToolPill({
+  label,
+  state,
+}: {
+  label: string;
+  state: "running" | "done";
+}) {
+  const running = state === "running";
+  return (
+    <span
+      className={
+        "relative inline-flex items-center gap-2 overflow-hidden rounded-full border px-3 py-1.5 text-[12.5px] " +
+        (running
+          ? "border-teal/30 bg-teal/[0.06] text-cream/80"
+          : "border-cream/10 bg-cream/[0.04] text-cream/55")
+      }
+    >
+      {running && <span aria-hidden="true" className="ng-shimmer absolute inset-0" />}
+      <span className="relative flex items-center gap-2">
+        {running ? (
+          <span className="ng-spin h-3 w-3 rounded-full border-[1.5px] border-teal/30 border-t-teal" />
+        ) : (
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-teal" fill="none">
+            <path d="M5 13l4 4 10-11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+        <span className={running ? "font-medium text-cream" : ""}>
+          {label}
+          {running ? "…" : ""}
+        </span>
+      </span>
     </span>
   );
 }
 
-// Custom AI glyph — bonded shield + spark. Distinctive vs the generic
-// Spark icon (Aaron's call).
-function AiGlyph() {
+function Composer({
+  input,
+  setInput,
+  pending,
+  empty,
+  onSubmit,
+}: {
+  input: string;
+  setInput: (v: string) => void;
+  pending: boolean;
+  empty: boolean;
+  onSubmit: () => void;
+}) {
   return (
-    <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-ng-teal/30 to-emerald-700/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_10px_-2px_rgba(61,220,151,0.3)]">
-      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] text-ng-teal" fill="none">
-        <path
-          d="M12 2.5l8 2.8v6.2c0 4.8-3.3 8.5-8 10.5-4.7-2-8-5.7-8-10.5V5.3l8-2.8z"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          fill="rgba(61,220,151,0.08)"
-        />
-        <path
-          d="M12 8l1.1 3.1L16 12l-2.9 1L12 16l-1.1-3L8 12l2.9-.9L12 8z"
-          fill="currentColor"
-        />
-      </svg>
-    </span>
-  );
-}
-
-function AiGlyphSmall() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none">
-      <path
-        d="M12 2.5l8 2.8v6.2c0 4.8-3.3 8.5-8 10.5-4.7-2-8-5.7-8-10.5V5.3l8-2.8z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        fill="rgba(61,220,151,0.08)"
-      />
-      <path
-        d="M12 8l1.1 3.1L16 12l-2.9 1L12 16l-1.1-3L8 12l2.9-.9L12 8z"
-        fill="currentColor"
-      />
-    </svg>
+    <div
+      className="relative z-10 ng-rise px-5 pt-3 sm:px-8"
+      style={{
+        animationDelay: empty ? "120ms" : "260ms",
+        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+      }}
+    >
+      <form
+        className="mx-auto w-full max-w-[720px]"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
+        <div className="group flex items-end gap-2 rounded-2xl border border-cream/10 bg-cream/[0.04] p-2 pl-3.5 backdrop-blur-md transition-all focus-within:border-teal/50 focus-within:bg-cream/[0.06] focus-within:shadow-[0_0_0_1px_rgba(61,220,151,0.25),0_18px_50px_-20px_rgba(61,220,151,0.4)]">
+          <button
+            type="button"
+            aria-label="Attach a log file"
+            className="ng-focus mb-1 rounded-lg p-1.5 text-cream/40 transition-colors hover:text-cream/70"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+              <path
+                d="M9 12.5v-4a3 3 0 0 1 6 0v6a5 5 0 0 1-10 0V7"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          <textarea
+            rows={1}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                onSubmit();
+              }
+            }}
+            disabled={pending}
+            placeholder="Ask about a connection, process, or host…"
+            aria-label="Message NetGuard"
+            className="ng-focus-none max-h-32 flex-1 resize-none self-center bg-transparent py-2 text-[15.5px] leading-relaxed text-cream placeholder:text-cream/35 outline-none disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            aria-label="Send message"
+            disabled={pending || !input.trim()}
+            className="ng-focus grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-teal text-pitch transition-all hover:scale-105 active:scale-95 disabled:bg-cream/10 disabled:text-cream/30"
+          >
+            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none">
+              <path
+                d="M12 19V6M6 12l6-6 6 6"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <p className="mt-2 px-1 text-center text-[11px] text-cream/35">
+          NetGuard reads metadata only — it can explain and recommend, but won&apos;t act without your go-ahead.
+        </p>
+      </form>
+    </div>
   );
 }
