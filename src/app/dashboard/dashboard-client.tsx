@@ -80,6 +80,11 @@ export function DashboardClient({
             </div>
             <div className="flex items-center gap-2.5">
               <span
+                title={
+                  summary.agentLastSeenAt
+                    ? `Last seen ${new Date(summary.agentLastSeenAt).toLocaleString()}`
+                    : "Run the install command to start the agent"
+                }
                 className={
                   "flex items-center gap-2 rounded-full border px-3 py-2 text-[12.5px] " +
                   (isAgentLive
@@ -231,38 +236,71 @@ function ActivityTable({ feed }: { feed: Connection[] }) {
           {feed.length} recent
         </span>
       </div>
-      <div className="overflow-x-auto">
-        <div className="min-w-[680px]">
-          <div className="grid grid-cols-[68px_1.4fr_2fr_64px_72px_84px] gap-3 border-y border-cream/[0.06] px-5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-cream/35">
-            <span>Time</span>
-            <span>Process</span>
-            <span>Destination</span>
-            <span>Port</span>
-            <span>Bytes</span>
-            <span>Status</span>
-          </div>
-          <div>
-            {feed.map((r, i) => {
-              const isWatch = r.state === "watch";
-              const isAlert = r.state === "alert";
-              return (
+      <div>
+        {/* Header: condensed columns at <sm (Process · Destination · Status),
+           full at sm+ (+Time, Port, Bytes). */}
+        <div className="hidden grid-cols-[68px_1.4fr_2fr_64px_72px_84px] gap-3 border-y border-cream/[0.06] px-5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-cream/35 sm:grid">
+          <span>Time</span>
+          <span>Process</span>
+          <span>Destination</span>
+          <span>Port</span>
+          <span>Bytes</span>
+          <span>Status</span>
+        </div>
+        <div className="grid grid-cols-[1.4fr_2fr_72px] gap-3 border-y border-cream/[0.06] px-4 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-cream/35 sm:hidden">
+          <span>Process</span>
+          <span>Destination</span>
+          <span>Status</span>
+        </div>
+        <div>
+          {feed.map((r, i) => {
+            const isWatch = r.state === "watch";
+            const isAlert = r.state === "alert";
+            const rowBase =
+              "items-center gap-3 border-b border-cream/[0.04] py-3 text-[13px] transition-colors " +
+              (isAlert
+                ? "bg-danger/[0.07] ng-alertpulse"
+                : isWatch
+                ? "bg-amber/[0.045]"
+                : "opacity-[0.82] hover:bg-cream/[0.02]");
+            const rowStyle = isWatch
+              ? { boxShadow: "inset 3px 0 0 rgba(242,201,76,0.9)" }
+              : undefined;
+
+            const cc = (
+              <span
+                className={
+                  "grid h-4 w-4 shrink-0 place-items-center rounded font-mono text-[9px] " +
+                  (isAlert
+                    ? "bg-danger/20 text-danger"
+                    : isWatch
+                    ? "bg-amber/20 text-amber"
+                    : "bg-cream/10 text-cream/40")
+                }
+              >
+                {r.cc && r.cc !== "··" ? r.cc : "?"}
+              </span>
+            );
+
+            const hostText = (
+              <span
+                className={
+                  "truncate font-mono text-[12.5px] " +
+                  (isAlert ? "text-danger" : isWatch ? "text-amber" : "text-cream/55")
+                }
+              >
+                {r.host}
+              </span>
+            );
+
+            return (
+              <div key={i}>
+                {/* Desktop / tablet row (≥sm) */}
                 <div
-                  key={i}
                   className={
-                    "grid grid-cols-[68px_1.4fr_2fr_64px_72px_84px] items-center gap-3 border-b border-cream/[0.04] px-5 py-3 text-[13px] transition-colors " +
-                    (isAlert
-                      ? "bg-danger/[0.07] ng-alertpulse"
-                      : isWatch
-                      ? "bg-amber/[0.045]"
-                      : "opacity-[0.82] hover:bg-cream/[0.02]")
+                    "hidden grid-cols-[68px_1.4fr_2fr_64px_72px_84px] px-5 sm:grid " + rowBase
                   }
-                  style={
-                    isWatch
-                      ? { boxShadow: "inset 3px 0 0 rgba(242,201,76,0.9)" }
-                      : isAlert
-                      ? undefined // alert-pulse provides its own inset shadow
-                      : undefined
-                  }
+                  style={rowStyle}
                 >
                   <span className="font-mono text-[12px] text-cream/40">{r.t}</span>
                   <div className="min-w-0">
@@ -270,26 +308,8 @@ function ActivityTable({ feed }: { feed: Connection[] }) {
                     <div className="truncate font-mono text-[11px] text-cream/30">{r.proc}</div>
                   </div>
                   <div className="flex min-w-0 items-center gap-2">
-                    <span
-                      className={
-                        "grid h-4 w-4 shrink-0 place-items-center rounded font-mono text-[9px] " +
-                        (isAlert
-                          ? "bg-danger/20 text-danger"
-                          : isWatch
-                          ? "bg-amber/20 text-amber"
-                          : "bg-cream/10 text-cream/40")
-                      }
-                    >
-                      {r.cc && r.cc !== "··" ? r.cc : "?"}
-                    </span>
-                    <span
-                      className={
-                        "truncate font-mono text-[12.5px] " +
-                        (isAlert ? "text-danger" : isWatch ? "text-amber" : "text-cream/55")
-                      }
-                    >
-                      {r.host}
-                    </span>
+                    {cc}
+                    {hostText}
                   </div>
                   <span className="font-mono text-[12px] text-cream/45">{r.port}</span>
                   <span className="font-mono text-[12px] text-cream/45">{r.bytes}</span>
@@ -297,11 +317,30 @@ function ActivityTable({ feed }: { feed: Connection[] }) {
                     <Pill state={r.state as PillState} live={isAlert} />
                   </span>
                 </div>
+                {/* Compact mobile row (<sm) — drops Time/Port/Bytes into a meta line */}
+                <div
+                  className={"grid grid-cols-[1.4fr_2fr_72px] px-4 sm:hidden " + rowBase}
+                  style={rowStyle}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-cream/90">{r.app}</div>
+                    <div className="truncate font-mono text-[10.5px] text-cream/30">
+                      {r.t} · :{r.port} · {r.bytes}
+                    </div>
+                  </div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    {cc}
+                    {hostText}
+                  </div>
+                  <span className="justify-self-end">
+                    <Pill state={r.state as PillState} live={isAlert} />
+                  </span>
+                </div>
+              </div>
               );
             })}
           </div>
         </div>
-      </div>
     </section>
   );
 }

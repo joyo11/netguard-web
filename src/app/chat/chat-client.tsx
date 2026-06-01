@@ -298,6 +298,14 @@ function Empty({ onPick }: { onPick: (q: string) => void }) {
           </button>
         ))}
       </div>
+      <p
+        className={
+          "mt-6 text-[12.5px] text-cream/35 transition-opacity duration-500 " +
+          (showChips ? "opacity-100" : "opacity-0")
+        }
+      >
+        Or type your own question below.
+      </p>
     </div>
   );
 }
@@ -523,8 +531,14 @@ function Composer({
             </svg>
           </button>
         </div>
-        <p className="mt-2 px-1 text-center text-[11px] text-cream/35">
-          NetGuard reads metadata only — it can explain and recommend, but won&apos;t act without your go-ahead.
+        <p className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 text-center text-[11px] text-cream/35">
+          <span>
+            <kbd className="rounded border border-cream/15 bg-cream/[0.04] px-1 py-px font-mono text-[10px] text-cream/55">Enter</kbd> to send
+            <span className="mx-1 text-cream/25">·</span>
+            <kbd className="rounded border border-cream/15 bg-cream/[0.04] px-1 py-px font-mono text-[10px] text-cream/55">Shift+Enter</kbd> for newline
+          </span>
+          <span className="text-cream/25">·</span>
+          <span>Metadata only, won&apos;t act without your go-ahead.</span>
         </p>
       </form>
     </div>
