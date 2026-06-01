@@ -90,42 +90,40 @@ function RowText({ title, sub }: { title: string; sub?: string }) {
 /* ────────── AGENT ────────── */
 
 function AgentCard({ delay }: { delay: number }) {
-  const [paused, setPaused] = useState(false);
+  // Until the agent has a control channel we can speak over, "pause" /
+  // "restart" / "uninstall" are local shell ops only the user can run.
+  // Surface them as copy-able instructions instead of buttons that lie.
+  const uninstall =
+    "kill $(cat ~/.netguard/agent.pid 2>/dev/null) 2>/dev/null && rm -rf ~/.netguard";
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(uninstall).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  };
 
   return (
     <Card title="Agent" desc="Local monitoring daemon" delay={delay}>
       <Row>
-        <RowText
-          title="Pause monitoring"
-          sub={
-            paused
-              ? "Paused — no traffic is being read"
-              : "Reading connection metadata live"
-          }
-        />
-        <Toggle
-          checked={!paused}
-          onChange={(v) => setPaused(!v)}
-          label="Pause monitoring"
-        />
-      </Row>
-      <Row>
-        <RowText title="Connection status" />
-        <Pill state={paused ? "watch" : "safe"} live={!paused}>
-          {paused ? "Paused" : "Connected"}
+        <RowText title="Status" sub="The agent runs on your machine. We don't control it from here." />
+        <Pill state="safe" live>
+          Local
         </Pill>
       </Row>
       <Row last>
         <RowText
-          title="Agent controls"
-          sub="Restart the daemon or remove it entirely"
+          title="Uninstall the agent"
+          sub="Run this in a terminal to stop monitoring and remove the agent."
         />
-        <div className="flex flex-wrap gap-2.5">
-          <button className="ng-focus rounded-lg border border-cream/12 bg-cream/[0.04] px-3.5 py-2 text-[13px] text-cream/80 transition-colors hover:bg-cream/[0.08]">
-            Restart
-          </button>
-          <button className="ng-focus rounded-lg border border-danger/30 bg-danger/[0.06] px-3.5 py-2 text-[13px] font-medium text-danger transition-colors hover:bg-danger/[0.12]">
-            Uninstall
+        <div className="flex shrink-0 items-center gap-2">
+          <code className="hidden truncate rounded-lg border border-cream/10 bg-[#0a0d13] px-3 py-2 font-mono text-[12px] text-cream/70 sm:block sm:max-w-[280px]">
+            {uninstall}
+          </code>
+          <button
+            onClick={copy}
+            className="ng-focus rounded-lg border border-cream/12 bg-cream/[0.04] px-3.5 py-2 text-[13px] text-cream/80 transition-colors hover:bg-cream/[0.08]"
+          >
+            {copied ? "Copied" : "Copy command"}
           </button>
         </div>
       </Row>
@@ -181,22 +179,120 @@ function PrivacyCard({ delay }: { delay: number }) {
         </div>
       </div>
       <div className="mt-5 flex flex-wrap gap-2.5">
-        <button className="ng-focus rounded-lg border border-cream/12 bg-cream/[0.04] px-3.5 py-2 text-[13px] text-cream/80 transition-colors hover:bg-cream/[0.08]">
+        <a
+          href="/api/account/export"
+          download
+          className="ng-focus rounded-lg border border-cream/12 bg-cream/[0.04] px-3.5 py-2 text-[13px] text-cream/80 transition-colors hover:bg-cream/[0.08]"
+        >
           Download all my data
-        </button>
-        <button className="ng-focus rounded-lg border border-danger/30 bg-danger/[0.06] px-3.5 py-2 text-[13px] font-medium text-danger transition-colors hover:bg-danger/[0.12]">
-          Delete account &amp; all data
-        </button>
+        </a>
+        <DeleteAccountButton />
       </div>
     </Card>
   );
 }
 
+function DeleteAccountButton() {
+  const [confirming, setConfirming] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const cancel = () => {
+    setConfirming(false);
+    setError(null);
+  };
+
+  const goAhead = async () => {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(j?.error ?? `Delete failed (${res.status})`);
+      }
+      window.location.href = "/";
+    } catch (e) {
+      setPending(false);
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  if (!confirming) {
+    return (
+      <button
+        onClick={() => setConfirming(true)}
+        className="ng-focus rounded-lg border border-danger/30 bg-danger/[0.06] px-3.5 py-2 text-[13px] font-medium text-danger transition-colors hover:bg-danger/[0.12]"
+      >
+        Delete account &amp; all data
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-2 rounded-xl border border-danger/30 bg-danger/[0.05] p-3">
+      <p className="text-[13px] text-cream/80">
+        This wipes your traffic data, agent tokens, and account. It cannot be undone.
+      </p>
+      {error && <p className="text-[12.5px] text-danger">{error}</p>}
+      <div className="flex flex-wrap gap-2.5">
+        <button
+          onClick={goAhead}
+          disabled={pending}
+          className="ng-focus rounded-lg bg-danger px-3.5 py-2 text-[13px] font-semibold text-cream transition-colors hover:bg-danger/90 disabled:opacity-60"
+        >
+          {pending ? "Deleting…" : "Yes, delete everything"}
+        </button>
+        <button
+          onClick={cancel}
+          disabled={pending}
+          className="ng-focus rounded-lg border border-cream/12 bg-cream/[0.04] px-3.5 py-2 text-[13px] text-cream/80 transition-colors hover:bg-cream/[0.08]"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ────────── NOTIFICATIONS ────────── */
 
+// Notification preferences live in localStorage. The actual notification
+// delivery (daily summary email, mobile push) isn't wired yet; we keep
+// the toggles so user choice survives reloads, but mark unbacked
+// channels as preview so people don't think mail is firing.
+const NOTIF_KEY = "netguard:notif-prefs:v1";
+type NotifPrefs = { summary: boolean; push: boolean };
+const DEFAULT_PREFS: NotifPrefs = { summary: true, push: false };
+
 function NotificationsCard({ delay }: { delay: number }) {
-  const [summary, setSummary] = useState(true);
-  const [push, setPush] = useState(false);
+  const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_PREFS);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(NOTIF_KEY);
+      if (raw) setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(raw) });
+    } catch {
+      // Ignore — corrupt JSON falls back to defaults.
+    }
+    setHydrated(true);
+  }, []);
+
+  const update = (patch: Partial<NotifPrefs>) => {
+    setPrefs((p) => {
+      const next = { ...p, ...patch };
+      try {
+        localStorage.setItem(NOTIF_KEY, JSON.stringify(next));
+      } catch {
+        // Quota / privacy mode — swallow.
+      }
+      return next;
+    });
+  };
 
   return (
     <Card title="Notifications" desc="How NetGuard reaches you" delay={delay}>
@@ -213,12 +309,26 @@ function NotificationsCard({ delay }: { delay: number }) {
         </div>
       </Row>
       <Row>
-        <RowText title="Daily summary email" sub="A plain-English recap at 9am" />
-        <Toggle checked={summary} onChange={setSummary} label="Daily summary email" />
+        <RowText
+          title="Daily summary email"
+          sub="A plain-English recap at 9am · preview"
+        />
+        <Toggle
+          checked={hydrated ? prefs.summary : DEFAULT_PREFS.summary}
+          onChange={(v) => update({ summary: v })}
+          label="Daily summary email"
+        />
       </Row>
       <Row last>
-        <RowText title="Push to my phone" sub="Requires the NetGuard mobile app" />
-        <Toggle checked={push} onChange={setPush} label="Push to my phone" />
+        <RowText
+          title="Push to my phone"
+          sub="Requires the NetGuard mobile app · preview"
+        />
+        <Toggle
+          checked={hydrated ? prefs.push : DEFAULT_PREFS.push}
+          onChange={(v) => update({ push: v })}
+          label="Push to my phone"
+        />
       </Row>
     </Card>
   );
