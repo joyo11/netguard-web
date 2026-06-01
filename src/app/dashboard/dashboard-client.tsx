@@ -11,11 +11,11 @@ import { SideNav } from "@/components/side-nav";
 import { MobileBar } from "@/components/mobile-bar";
 import {
   Aurora,
-  AvatarB,
   NetGuardGlyph,
   Pill,
   type PillState,
 } from "@/components/v3";
+import { AccountMenu } from "@/components/account-menu";
 import type { Connection } from "@/data/traffic";
 
 type Summary = {
@@ -114,6 +114,7 @@ export function DashboardClient({
                   />
                 </svg>
               </Link>
+              <AccountMenu email={userEmail} placement="header" />
               <Link
                 href="/chat"
                 className="ng-focus flex items-center gap-2 rounded-lg bg-teal px-4 py-2 text-[13.5px] font-semibold text-pitch transition-transform hover:scale-[1.03] active:scale-95"

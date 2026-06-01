@@ -5,7 +5,15 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export function AccountMenu({ email }: { email: string }) {
+type Placement = "rail" | "header";
+
+export function AccountMenu({
+  email,
+  placement = "rail",
+}: {
+  email: string;
+  placement?: Placement;
+}) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement | null>(null);
 
@@ -27,6 +35,16 @@ export function AccountMenu({ email }: { email: string }) {
 
   const initial = email ? email[0]?.toUpperCase() : "?";
 
+  const triggerClass =
+    placement === "header"
+      ? "ng-focus grid h-9 w-9 place-items-center rounded-full border border-cream/10 bg-teal/15 text-[13px] font-semibold text-teal transition-transform hover:scale-105 active:scale-95"
+      : "ng-focus grid h-9 w-9 place-items-center rounded-full bg-teal/15 text-[13px] font-semibold text-teal transition-transform hover:scale-105 active:scale-95";
+
+  const menuClass =
+    placement === "header"
+      ? "absolute right-0 top-[44px] z-50 w-[244px] origin-top-right overflow-hidden rounded-xl border border-cream/10 bg-[#0d111a] shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)] ng-pop"
+      : "absolute bottom-0 left-[54px] z-50 w-[244px] origin-bottom-left overflow-hidden rounded-xl border border-cream/10 bg-[#0d111a] shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)] ng-pop";
+
   return (
     <div ref={wrap} className="relative">
       <button
@@ -35,16 +53,13 @@ export function AccountMenu({ email }: { email: string }) {
         aria-expanded={open}
         aria-label="Account"
         title={email || "Account"}
-        className="ng-focus grid h-9 w-9 place-items-center rounded-full bg-teal/15 text-[13px] font-semibold text-teal transition-transform hover:scale-105 active:scale-95"
+        className={triggerClass}
       >
         {initial}
       </button>
 
       {open && (
-        <div
-          role="menu"
-          className="absolute bottom-0 left-[54px] z-50 w-[244px] origin-bottom-left overflow-hidden rounded-xl border border-cream/10 bg-[#0d111a] shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)] ng-pop"
-        >
+        <div role="menu" className={menuClass}>
           <div className="border-b border-cream/[0.06] px-4 py-3">
             <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-cream/35">
               Signed in as
