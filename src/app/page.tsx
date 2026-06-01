@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Aurora, NetGuardGlyph, WordmarkV3 } from "@/components/v3";
 import { LiveMock, RevealStub } from "@/components/landing-v3";
+import { AccountMenu } from "@/components/account-menu";
 
 export const dynamic = "force-dynamic";
 
@@ -64,18 +65,13 @@ function LandingNav({ isAuthed, email }: { isAuthed: boolean; email: string }) {
         </div>
         {isAuthed ? (
           <div className="flex items-center gap-3">
-            <span className="hidden items-center gap-2 rounded-full border border-cream/10 bg-cream/[0.04] py-1.5 pl-1.5 pr-3.5 text-[13px] text-cream/70 sm:flex">
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-teal/20 text-[11px] font-semibold text-teal">
-                {email[0]?.toUpperCase() ?? "?"}
-              </span>
-              <span className="max-w-[160px] truncate">{email}</span>
-            </span>
             <Link
               href="/dashboard"
               className="ng-focus rounded-lg bg-teal px-4 py-2 text-[13.5px] font-semibold text-pitch transition-transform hover:scale-[1.03] active:scale-95"
             >
               Open dashboard →
             </Link>
+            <AccountMenu email={email} placement="header" />
           </div>
         ) : (
           <div className="flex items-center gap-2.5">
