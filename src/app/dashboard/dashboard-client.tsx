@@ -1,36 +1,22 @@
 "use client";
 
+// Dashboard — v3 Variant B port. Aurora bg, NavRail with Chat tab,
+// "Ask NetGuard" header CTA, worst-state status banner, activity table
+// with row tonal hierarchy + alert pulse, install-as-empty-state.
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SideNav } from "@/components/side-nav";
 import { MobileBar } from "@/components/mobile-bar";
 import {
-  ArrowUpRight,
-  ChevRight,
-  Copy,
-  Check,
-  Expand,
-  Filter,
-  Gear,
-  Paperclip,
-  Send,
-  ShieldCheck,
-  Spark,
-} from "@/components/icons";
+  Aurora,
+  AvatarB,
+  NetGuardGlyph,
+  Pill,
+  type PillState,
+} from "@/components/v3";
 import type { Connection } from "@/data/traffic";
-
-const CHAT_CHIPS = [
-  "What's happening right now?",
-  "Anything suspicious today?",
-  "Why is my laptop talking to RO?",
-];
-
-const STATE_META = {
-  safe:  { dot: "bg-ng-teal",  text: "text-ng-teal",  ring: "border-ng-teal/25  bg-ng-teal/10",  label: "Safe"  },
-  watch: { dot: "bg-ng-amber", text: "text-ng-amber", ring: "border-ng-amber/25 bg-ng-amber/10", label: "Watch" },
-  alert: { dot: "bg-ng-red",   text: "text-ng-red",   ring: "border-ng-red/25   bg-ng-red/10",   label: "Alert" },
-};
 
 type Summary = {
   totalConnections24h: number;
@@ -52,446 +38,352 @@ export function DashboardClient({
   installCmd: string;
   userEmail: string;
 }) {
-  const [drawer, setDrawer] = useState(true);
   const hasData = feed.length > 0;
   const isAgentLive =
     summary.agentLastSeenAt &&
     Date.now() - new Date(summary.agentLastSeenAt).getTime() < 60_000;
 
-  // Live-refresh the server component every 5s so new agent batches surface
-  // without the user having to manually reload.
+  // Live refresh
   const router = useRouter();
   useEffect(() => {
     const id = setInterval(() => router.refresh(), 5_000);
     return () => clearInterval(id);
   }, [router]);
 
-  return (
-    <div className="grain ambient relative flex min-h-screen w-full">
-      <SideNav active="dashboard" />
+  const worst: "safe" | "watch" | "alert" =
+    summary.alerts > 0 ? "alert" : summary.watching > 0 ? "watch" : "safe";
 
-      <div className="relative z-10 flex min-h-screen flex-1 flex-col overflow-hidden md:flex-row">
-        <div className="flex flex-1 flex-col overflow-y-auto">
-          <MobileBar active="dashboard" />
-          <div className="mx-auto w-full max-w-[1280px] px-4 py-5 md:px-8 md:py-7">
-            {/* header */}
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h1 className="text-[22px] font-semibold tracking-[-0.02em]">Dashboard</h1>
-                <p className="mt-0.5 text-[13px] text-ng-sub">
-                  {summary.hostname ? (
-                    <>
-                      Live traffic from <span className="font-mono text-ng-ink">{summary.hostname}</span>
-                    </>
-                  ) : (
-                    <>
-                      Signed in as <span className="font-mono text-ng-ink">{userEmail}</span>
-                    </>
-                  )}
-                </p>
-              </div>
-              <div className="flex items-center gap-2.5">
+  return (
+    <div className="relative flex min-h-screen bg-pitch font-display text-cream antialiased">
+      <Aurora className="!h-[420px] opacity-70" />
+      <SideNav active="dashboard" email={userEmail} />
+
+      <main className="ng-scroll relative z-10 flex flex-1 flex-col overflow-y-auto">
+        <MobileBar active="dashboard" />
+        <div className="mx-auto w-full max-w-[1100px] px-5 py-7 sm:px-8 sm:py-9">
+          {/* header row */}
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-[28px] font-semibold tracking-[-0.02em]">Dashboard</h1>
+              <p className="mt-1 text-[14px] text-cream/45">
+                {summary.hostname ? (
+                  <>
+                    Live traffic from{" "}
+                    <span className="font-mono text-cream/70">{summary.hostname}</span>
+                  </>
+                ) : (
+                  <>
+                    Signed in as <span className="font-mono text-cream/70">{userEmail}</span>
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <span
+                className={
+                  "flex items-center gap-2 rounded-full border px-3 py-2 text-[12.5px] " +
+                  (isAgentLive
+                    ? "border-teal/25 bg-teal/[0.07] text-cream/75"
+                    : "border-cream/10 bg-cream/[0.03] text-cream/45")
+                }
+              >
                 <span
                   className={
-                    "flex items-center gap-2 rounded-full border py-1.5 pl-3 pr-3.5 text-[12.5px] " +
-                    (isAgentLive
-                      ? "border-ng-teal/20 bg-ng-teal/[0.06] text-ng-sub"
-                      : "border-white/[0.08] bg-white/[0.03] text-ng-faint")
+                    "h-1.5 w-1.5 rounded-full " +
+                    (isAgentLive ? "bg-teal ng-livedot" : "bg-cream/30")
                   }
-                >
-                  <span className="relative grid h-2 w-2 place-items-center">
-                    {isAgentLive && (
-                      <span className="absolute h-2 w-2 rounded-full bg-ng-teal/70 pulse-ring" />
-                    )}
-                    <span
-                      className={
-                        "h-2 w-2 rounded-full " +
-                        (isAgentLive ? "bg-ng-teal" : "bg-ng-faint")
-                      }
-                    />
-                  </span>
-                  {isAgentLive
-                    ? "Agent connected"
-                    : summary.agentLastSeenAt
-                    ? "Agent idle"
-                    : "Agent not installed"}
-                </span>
-                <Link
-                  href="/settings"
-                  className="grid h-9 w-9 place-items-center rounded-full border border-white/[0.08] bg-white/[0.03] text-ng-sub transition hover:bg-white/[0.06] hover:text-ng-ink"
-                >
-                  <Gear className="h-4 w-4" />
-                </Link>
-              </div>
+                />
+                {isAgentLive
+                  ? "Agent connected · live"
+                  : summary.agentLastSeenAt
+                  ? "Agent idle"
+                  : "Agent not installed"}
+              </span>
+              <Link
+                href="/settings"
+                aria-label="Settings"
+                className="ng-focus grid h-9 w-9 place-items-center rounded-lg border border-cream/10 bg-cream/[0.03] text-cream/55 transition-colors hover:text-cream"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]">
+                  <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
+                  <path
+                    d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2 5.5 5.5"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </Link>
+              <Link
+                href="/chat"
+                className="ng-focus flex items-center gap-2 rounded-lg bg-teal px-4 py-2 text-[13.5px] font-semibold text-pitch transition-transform hover:scale-[1.03] active:scale-95"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+                  <path d="M12 3l1.4 4.1L17.5 8.5 13.4 9.9 12 14l-1.4-4.1L6.5 8.5l4.1-1.4L12 3Z" />
+                </svg>
+                Ask NetGuard
+              </Link>
             </div>
-
-            {hasData ? (
-              <>
-                {/* status banner */}
-                <StatusBanner summary={summary} />
-                {/* feed */}
-                <FeedTable feed={feed} />
-              </>
-            ) : (
-              <EmptyState installCmd={installCmd} />
-            )}
           </div>
-        </div>
 
-        {/* chat drawer — desktop only; mobile has a top-nav link to /chat */}
-        <div className="hidden md:flex">
-          <ChatDrawerPanel
-            open={drawer}
-            onToggle={() => setDrawer((v) => !v)}
-            isOnboarding={!hasData}
-          />
+          {hasData ? (
+            <>
+              <StatusBanner summary={summary} worst={worst} />
+              <ActivityTable feed={feed} />
+            </>
+          ) : (
+            <InstallEmpty installCmd={installCmd} />
+          )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
-// ─── Banner ────────────────────────────────────────────────────────────
-function StatusBanner({ summary }: { summary: Summary }) {
-  const status =
-    summary.alerts > 0
-      ? { tone: "alert", title: `${summary.alerts} alert${summary.alerts === 1 ? "" : "s"} need review` }
-      : summary.watching > 0
-      ? { tone: "watch", title: `${summary.watching} connection${summary.watching === 1 ? "" : "s"} on watchlist` }
-      : { tone: "safe", title: "All quiet — 0 alerts today" };
-
-  const palette =
-    status.tone === "alert"
-      ? { border: "border-ng-red/20",   bg: "bg-ng-red/[0.06]",   bar: "bg-ng-red",   icon: "text-ng-red",   iconBg: "bg-ng-red/15"   }
-      : status.tone === "watch"
-      ? { border: "border-ng-amber/20", bg: "bg-ng-amber/[0.06]", bar: "bg-ng-amber", icon: "text-ng-amber", iconBg: "bg-ng-amber/15" }
-      : { border: "border-ng-teal/20",  bg: "bg-ng-teal/[0.06]",  bar: "bg-ng-teal",  icon: "text-ng-teal",  iconBg: "bg-ng-teal/15"  };
+function StatusBanner({ summary, worst }: { summary: Summary; worst: "safe" | "watch" | "alert" }) {
+  const cfg =
+    worst === "alert"
+      ? {
+          wash: "border-danger/35 bg-danger/[0.08]",
+          bar: "rgba(230,57,70,0.9)",
+          icon: "bg-danger/15 text-danger",
+          title: `${summary.alerts} alert${summary.alerts === 1 ? "" : "s"} need review`,
+        }
+      : worst === "watch"
+      ? {
+          wash: "border-amber/30 bg-amber/[0.06]",
+          bar: "rgba(242,201,76,0.9)",
+          icon: "bg-amber/15 text-amber",
+          title: `${summary.watching} connection${summary.watching === 1 ? "" : "s"} on the watchlist`,
+        }
+      : {
+          wash: "border-teal/30 bg-teal/[0.06]",
+          bar: "rgba(61,220,151,0.9)",
+          icon: "bg-teal/15 text-teal",
+          title: "All quiet — 0 alerts today",
+        };
 
   return (
     <div
       className={
-        "relative overflow-hidden rounded-2xl border px-5 py-4 shadow-card " +
-        palette.border +
-        " " +
-        palette.bg
+        "ng-rise mt-7 flex flex-wrap items-center justify-between gap-5 overflow-hidden rounded-2xl border px-5 py-4 " +
+        cfg.wash
       }
+      style={{ boxShadow: `inset 3px 0 0 ${cfg.bar}` }}
     >
-      <div className={"pointer-events-none absolute inset-y-0 left-0 w-1 " + palette.bar} />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3.5 pl-1">
-          <span className={"grid h-9 w-9 place-items-center rounded-full " + palette.iconBg + " " + palette.icon}>
-            <ShieldCheck className="h-[18px] w-[18px]" />
+      <div className="flex items-center gap-3.5">
+        <span className={`grid h-11 w-11 place-items-center rounded-xl ${cfg.icon}`}>
+          <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+            <path
+              d="M12 3 5 5.6v5.3c0 4.1 2.8 7.4 7 9 4.2-1.6 7-4.9 7-9V5.6L12 3Z"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+        <div>
+          <p className="text-[16px] font-semibold text-cream">{cfg.title}</p>
+          <p className="mt-0.5 text-[13px] text-cream/50">
+            {summary.totalConnectionsLastHour} this hour · {summary.totalConnections24h} today
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-7 pr-1">
+        <Metric n={String(summary.totalConnections24h)} l="Connections" />
+        <Metric n={String(summary.watching)} l="Watching" color="text-amber" />
+        <Metric
+          n={String(summary.alerts)}
+          l="Alerts"
+          color={summary.alerts > 0 ? "text-danger" : "text-teal"}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Metric({ n, l, color = "text-cream" }: { n: string; l: string; color?: string }) {
+  return (
+    <div className="text-right">
+      <div className={`text-[22px] font-semibold tabular-nums leading-none ${color}`}>{n}</div>
+      <div className="mt-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-cream/35">
+        {l}
+      </div>
+    </div>
+  );
+}
+
+function ActivityTable({ feed }: { feed: Connection[] }) {
+  return (
+    <section
+      className="ng-rise mt-6 overflow-hidden rounded-2xl border border-cream/[0.07] bg-cream/[0.015]"
+      style={{ animationDelay: "80ms" }}
+    >
+      <div className="flex items-center justify-between px-5 py-4">
+        <div className="flex items-center gap-3">
+          <h2 className="text-[16px] font-semibold tracking-tight">Live activity</h2>
+          <span className="flex items-center gap-1.5 rounded-full border border-teal/25 bg-teal/[0.07] px-2.5 py-1 text-[11.5px] text-teal">
+            <span className="h-1.5 w-1.5 rounded-full bg-teal ng-livedot" /> streaming
           </span>
+        </div>
+        <span className="font-mono text-[11.5px] text-cream/35">
+          {feed.length} recent
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[680px]">
+          <div className="grid grid-cols-[68px_1.4fr_2fr_64px_72px_84px] gap-3 border-y border-cream/[0.06] px-5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-cream/35">
+            <span>Time</span>
+            <span>Process</span>
+            <span>Destination</span>
+            <span>Port</span>
+            <span>Bytes</span>
+            <span>Status</span>
+          </div>
           <div>
-            <p className="text-[15px] font-semibold text-ng-ink">{status.title}</p>
-            <p className="text-[12.5px] text-ng-sub">
-              {summary.totalConnectionsLastHour} connection
-              {summary.totalConnectionsLastHour === 1 ? "" : "s"} in the last hour ·{" "}
-              {summary.totalConnections24h} today
-            </p>
+            {feed.map((r, i) => {
+              const isWatch = r.state === "watch";
+              const isAlert = r.state === "alert";
+              return (
+                <div
+                  key={i}
+                  className={
+                    "grid grid-cols-[68px_1.4fr_2fr_64px_72px_84px] items-center gap-3 border-b border-cream/[0.04] px-5 py-3 text-[13px] transition-colors " +
+                    (isAlert
+                      ? "bg-danger/[0.07] ng-alertpulse"
+                      : isWatch
+                      ? "bg-amber/[0.045]"
+                      : "opacity-[0.82] hover:bg-cream/[0.02]")
+                  }
+                  style={
+                    isWatch
+                      ? { boxShadow: "inset 3px 0 0 rgba(242,201,76,0.9)" }
+                      : isAlert
+                      ? undefined // alert-pulse provides its own inset shadow
+                      : undefined
+                  }
+                >
+                  <span className="font-mono text-[12px] text-cream/40">{r.t}</span>
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-cream/90">{r.app}</div>
+                    <div className="truncate font-mono text-[11px] text-cream/30">{r.proc}</div>
+                  </div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className={
+                        "grid h-4 w-4 shrink-0 place-items-center rounded font-mono text-[9px] " +
+                        (isAlert
+                          ? "bg-danger/20 text-danger"
+                          : isWatch
+                          ? "bg-amber/20 text-amber"
+                          : "bg-cream/10 text-cream/40")
+                      }
+                    >
+                      {r.cc && r.cc !== "··" ? r.cc : "?"}
+                    </span>
+                    <span
+                      className={
+                        "truncate font-mono text-[12.5px] " +
+                        (isAlert ? "text-danger" : isWatch ? "text-amber" : "text-cream/55")
+                      }
+                    >
+                      {r.host}
+                    </span>
+                  </div>
+                  <span className="font-mono text-[12px] text-cream/45">{r.port}</span>
+                  <span className="font-mono text-[12px] text-cream/45">{r.bytes}</span>
+                  <span>
+                    <Pill state={r.state as PillState} live={isAlert} />
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
-        <div className="flex items-center gap-6 pr-1">
-          <Metric label="Connections" value={String(summary.totalConnections24h)} />
-          <Metric label="Watching" value={String(summary.watching)} tone="amber" />
-          <Metric label="Alerts" value={String(summary.alerts)} tone={summary.alerts > 0 ? "red" : "teal"} />
-        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
-// ─── Feed ──────────────────────────────────────────────────────────────
-function FeedTable({ feed }: { feed: Connection[] }) {
-  return (
-    <div className="mt-6 overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] shadow-card backdrop-blur-xl">
-      <div className="overflow-x-auto">
-      <div className="min-w-[640px]">
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
-        <div className="flex items-center gap-2.5">
-          <h2 className="text-[14px] font-semibold">Live activity</h2>
-          <span className="flex items-center gap-1.5 rounded-full bg-white/[0.04] px-2 py-0.5 text-[11px] text-ng-sub">
-            <span className="h-1.5 w-1.5 rounded-full bg-ng-teal blink" /> streaming
-          </span>
-        </div>
-        <div className="flex items-center gap-1 text-[12px] text-ng-faint">
-          <Filter className="h-3.5 w-3.5" /> All processes
-        </div>
-      </div>
-
-      <div className="grid grid-cols-[64px_minmax(140px,1fr)_minmax(200px,1.4fr)_56px_88px_88px] gap-3 px-5 py-2 text-[10.5px] font-medium uppercase tracking-[0.12em] text-ng-faint">
-        <span>Time</span>
-        <span>Process</span>
-        <span>Destination</span>
-        <span className="text-right">Port</span>
-        <span className="text-right">Bytes</span>
-        <span className="text-right">Status</span>
-      </div>
-
-      <div className="divide-y divide-white/[0.04]">
-        {feed.map((r, i) => {
-          const m = STATE_META[r.state];
-          // Aaron's tonal hierarchy — safe rows recede, watch + alert get
-          // a left accent bar + subtle wash, alert rows tint slightly more.
-          const rowBg =
-            r.state === "alert"
-              ? "bg-ng-red/[0.04] hover:bg-ng-red/[0.07]"
-              : r.state === "watch"
-              ? "bg-ng-amber/[0.025] hover:bg-ng-amber/[0.05]"
-              : "hover:bg-white/[0.02]";
-          const accentBar =
-            r.state === "alert"
-              ? "bg-ng-red"
-              : r.state === "watch"
-              ? "bg-ng-amber"
-              : "bg-transparent";
-          return (
-            <div
-              key={i}
-              className={
-                "relative grid grid-cols-[64px_minmax(140px,1fr)_minmax(200px,1.4fr)_56px_88px_88px] items-center gap-3 border-t border-white/[0.04] px-5 py-3 transition " +
-                rowBg
-              }
-            >
-              <span className={"absolute inset-y-0 left-0 w-[2px] " + accentBar} />
-              <span className="tnum font-mono text-[12.5px] text-ng-faint">{r.t}</span>
-              <div className="min-w-0">
-                <p
-                  className={
-                    "truncate text-[13.5px] font-medium " +
-                    (r.state === "safe" ? "text-ng-ink/85" : "text-ng-ink")
-                  }
-                >
-                  {r.app}
-                </p>
-                <p className="truncate font-mono text-[11px] text-ng-faint">{r.proc}</p>
-              </div>
-              <div className="flex min-w-0 items-center gap-2">
-                <Flag cc={r.cc} />
-                <span
-                  className={
-                    "truncate font-mono text-[12.5px] " +
-                    (r.state === "alert" ? "text-ng-red" : r.state === "watch" ? "text-ng-amber" : "text-ng-ink")
-                  }
-                >
-                  {r.host}
-                </span>
-              </div>
-              <span className="tnum text-right font-mono text-[12.5px] text-ng-sub">{r.port}</span>
-              <span className="tnum text-right font-mono text-[12.5px] text-ng-sub">{r.bytes}</span>
-              <div className="flex justify-end">
-                <span
-                  className={
-                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium " +
-                    m.ring +
-                    " " +
-                    m.text
-                  }
-                >
-                  <span className={"h-1.5 w-1.5 rounded-full " + m.dot} /> {m.label}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Empty state — the install command IS the empty state ──────────────
-function EmptyState({ installCmd }: { installCmd: string }) {
+function InstallEmpty({ installCmd }: { installCmd: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     navigator.clipboard?.writeText(installCmd).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
   };
+
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-10 shadow-card backdrop-blur-xl text-center">
-      <span className="inline-grid h-12 w-12 place-items-center rounded-2xl bg-ng-teal/15 text-ng-teal">
-        <Spark className="h-6 w-6" />
+    <div className="ng-rise mt-10 flex flex-col items-center justify-center py-10 text-center">
+      <span className="relative mb-6 grid h-16 w-16 place-items-center rounded-2xl ng-avatarB">
+        <NetGuardGlyph className="h-8 w-8 text-pitch" strokeWidth={1.8} />
       </span>
-      <h2 className="mt-4 text-[20px] font-semibold tracking-[-0.02em]">
-        Your dashboard will fill up the moment the agent starts streaming.
+      <h2 className="text-[26px] font-semibold tracking-[-0.02em]">
+        Install the agent to begin
       </h2>
-      <p className="mx-auto mt-2 max-w-[440px] text-[13.5px] text-ng-sub">
-        Paste this one command in a terminal on the machine you want to watch. It runs locally,
-        captures only metadata, and starts streaming to here.
+      <p className="mx-auto mt-3 max-w-[440px] text-[15px] leading-relaxed text-cream/50">
+        One command. It reads connection metadata only — no payloads, no root. You&apos;ll see live
+        traffic here within seconds.
       </p>
 
-      <div className="mx-auto mt-6 flex max-w-[680px] items-start gap-3 rounded-xl border border-white/[0.08] bg-[#0a0d13] py-3.5 pl-4 pr-2.5 text-left">
-        <span className="mt-1 select-none text-ng-faint">$</span>
-        <code className="tnum min-w-0 flex-1 break-all font-mono text-[12.5px] leading-relaxed text-ng-ink">
-          {installCmd}
-        </code>
-        <button
-          onClick={copy}
-          className={
-            "flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[12.5px] font-medium transition " +
-            (copied
-              ? "border-ng-teal/30 bg-ng-teal/10 text-ng-teal"
-              : "border-white/10 bg-white/[0.04] text-ng-sub hover:bg-white/[0.08] hover:text-ng-ink")
-          }
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-
-      <p className="mt-4 text-[11.5px] text-ng-faint">
-        macOS · Linux · ~6 MB · no root required
-      </p>
-      <p className="mt-2 text-[11.5px] text-ng-faint">
-        This page will auto-refresh when traffic starts arriving (~15 seconds after install).
-      </p>
-    </div>
-  );
-}
-
-// ─── Drawer ────────────────────────────────────────────────────────────
-function ChatDrawerPanel({
-  open,
-  onToggle,
-  isOnboarding,
-}: {
-  open: boolean;
-  onToggle: () => void;
-  isOnboarding: boolean;
-}) {
-  if (!open) {
-    return (
-      <button
-        onClick={onToggle}
-        className="group relative z-10 flex w-12 shrink-0 flex-col items-center gap-3 border-l border-white/[0.06] bg-white/[0.015] py-5 backdrop-blur-xl transition hover:bg-white/[0.03]"
-      >
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-ng-teal/15 text-ng-teal">
-          <Spark className="h-4 w-4" />
-        </span>
-        <span className="text-[11px] font-medium tracking-wide text-ng-sub [writing-mode:vertical-rl]">
-          Ask NetGuard
-        </span>
-      </button>
-    );
-  }
-  return (
-    <aside className="relative z-10 flex w-[360px] shrink-0 flex-col border-l border-white/[0.06] bg-[#0c1118]/70 backdrop-blur-2xl">
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3.5">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-ng-teal/15 text-ng-teal">
-            <Spark className="h-4 w-4" />
-          </span>
-          <div>
-            <p className="text-[13.5px] font-semibold leading-tight">NetGuard AI</p>
-            <p className="text-[11px] text-ng-faint">Powered by Claude</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <Link
-            href="/chat"
-            title="Expand"
-            className="grid h-7 w-7 place-items-center rounded-md text-ng-faint transition hover:bg-white/[0.05] hover:text-ng-ink"
-          >
-            <Expand className="h-3.5 w-3.5" />
-          </Link>
+      <div className="mt-7 w-full max-w-[680px] overflow-hidden rounded-xl border border-cream/10 bg-[#0a0d13] text-left">
+        <div className="flex items-start justify-between gap-3 px-4 py-3.5">
+          <code className="min-w-0 flex-1 break-all font-mono text-[13px] text-cream/85">
+            <span className="select-none text-teal">$ </span>
+            {installCmd}
+          </code>
           <button
-            onClick={onToggle}
-            title="Collapse"
-            className="grid h-7 w-7 place-items-center rounded-md text-ng-faint transition hover:bg-white/[0.05] hover:text-ng-ink"
+            onClick={copy}
+            className="ng-focus flex shrink-0 items-center gap-1.5 rounded-lg border border-cream/12 bg-cream/[0.04] px-3 py-1.5 text-[12.5px] text-cream/75 transition-colors hover:bg-cream/[0.08]"
           >
-            <ChevRight className="h-4 w-4" />
+            {copied ? (
+              <>
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-teal" fill="none">
+                  <path
+                    d="M5 13l4 4 10-11"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Copied
+              </>
+            ) : (
+              "Copy"
+            )}
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-5">
-        <div className="flex flex-col items-center text-center">
-          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-ng-teal/25 to-emerald-700/20 text-ng-teal">
-            <Spark className="h-6 w-6" />
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+        {["No root", "Metadata only", "Open source"].map((t) => (
+          <span
+            key={t}
+            className="flex items-center gap-1.5 rounded-full border border-cream/10 bg-cream/[0.03] px-3 py-1.5 text-[12.5px] text-cream/60"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-teal" fill="none">
+              <path
+                d="M5 13l4 4 10-11"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {t}
           </span>
-          <p className="mt-3 text-[15px] font-semibold tracking-[-0.01em]">
-            {isOnboarding ? "Ready when your agent is." : "Hey — I'm watching your network."}
-          </p>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-ng-sub">
-            {isOnboarding
-              ? "Once the install command above runs, ask me anything about your traffic and I'll answer with real data."
-              : "Ask me anything about what your machine is doing online. I'll explain it plainly."}
-          </p>
-        </div>
-
-        <div className="mt-6 space-y-2">
-          <p className="px-1 text-[11px] font-medium uppercase tracking-[0.14em] text-ng-faint">
-            Try asking
-          </p>
-          {CHAT_CHIPS.map((c) => (
-            <Link
-              key={c}
-              href="/chat"
-              className="flex w-full items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-2.5 text-left text-[13px] text-ng-ink transition hover:border-ng-teal/30 hover:bg-ng-teal/[0.06]"
-            >
-              {c}
-              <ArrowUpRight className="h-3.5 w-3.5 text-ng-faint" />
-            </Link>
-          ))}
-        </div>
+        ))}
       </div>
 
-      <div className="border-t border-white/[0.06] p-3">
-        <Link
-          href="/chat"
-          className="flex items-end gap-2 rounded-xl border border-white/[0.08] bg-[#0a0d13] px-3 py-2.5"
-        >
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ng-faint">
-            <Paperclip className="h-4 w-4" />
-          </span>
-          <span className="flex-1 py-1 text-[13px] text-ng-faint">Ask about your traffic…</span>
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-white/[0.06] text-ng-faint">
-            <Send className="h-4 w-4" />
-          </span>
-        </Link>
-      </div>
-    </aside>
-  );
-}
-
-// ─── Bits ──────────────────────────────────────────────────────────────
-function Metric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "amber" | "teal" | "red";
-}) {
-  const c =
-    tone === "amber"
-      ? "text-ng-amber"
-      : tone === "teal"
-      ? "text-ng-teal"
-      : tone === "red"
-      ? "text-ng-red"
-      : "text-ng-ink";
-  return (
-    <div className="text-right">
-      <p className={"tnum text-[20px] font-semibold leading-none " + c}>{value}</p>
-      <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-ng-faint">{label}</p>
+      <p className="mt-9 flex items-center gap-2.5 font-mono text-[12.5px] text-cream/40 ng-wait">
+        <span className="flex gap-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-teal" />
+          <span className="h-1.5 w-1.5 rounded-full bg-teal/50" />
+          <span className="h-1.5 w-1.5 rounded-full bg-teal/25" />
+        </span>
+        Waiting for first packet…
+      </p>
     </div>
-  );
-}
-
-function Flag({ cc }: { cc: string }) {
-  const known = cc && cc !== "··";
-  return (
-    <span
-      className={
-        "grid h-4 w-5 shrink-0 place-items-center rounded-[3px] text-[9px] font-semibold tracking-tight " +
-        (known ? "bg-white/[0.07] text-ng-sub" : "bg-white/[0.04] text-ng-faint")
-      }
-    >
-      {known ? cc : "?"}
-    </span>
   );
 }

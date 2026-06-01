@@ -1,25 +1,29 @@
+// v3 NavRail — left sidebar (desktop only). Hidden on mobile; the
+// MobileBar takes over.
+
 import Link from "next/link";
-import { Gear, Grid, Shield } from "@/components/icons";
+import { NetGuardGlyph } from "@/components/v3";
 
-type Active = "dashboard" | "settings" | null;
+type Active = "dashboard" | "chat" | "settings" | null;
 
-const ITEMS: { id: Exclude<Active, null>; href: string; icon: typeof Grid; label: string }[] = [
-  { id: "dashboard", href: "/dashboard", icon: Grid, label: "Dashboard" },
-  { id: "settings",  href: "/settings",  icon: Gear, label: "Settings" },
+const ITEMS: { id: Exclude<Active, null>; href: string; icon: () => React.ReactElement; label: string }[] = [
+  { id: "dashboard", href: "/dashboard", icon: GridIcon, label: "Dashboard" },
+  { id: "chat",      href: "/chat",      icon: ChatIcon, label: "Chat" },
+  { id: "settings",  href: "/settings",  icon: GearIcon, label: "Settings" },
 ];
 
-export function SideNav({ active }: { active: Active }) {
+export function SideNav({ active, email = "" }: { active: Active; email?: string }) {
   return (
-    <nav className="sticky top-0 z-20 hidden h-screen w-[72px] shrink-0 flex-col items-center border-r border-white/[0.06] bg-[#0a0d13]/60 py-5 backdrop-blur-xl md:flex">
+    <aside className="sticky top-0 z-20 hidden h-screen w-[68px] shrink-0 flex-col items-center border-r border-cream/[0.06] bg-[#0a0d13] py-5 md:flex">
       <Link
         href="/"
-        title="NetGuard"
-        className="grid h-10 w-10 place-items-center"
+        title="NetGuard home"
+        aria-label="NetGuard home"
+        className="ng-focus grid h-10 w-10 place-items-center rounded-xl ng-avatarB"
       >
-        <Shield className="h-8 w-8" />
+        <NetGuardGlyph className="h-5 w-5 text-pitch" strokeWidth={1.9} />
       </Link>
-
-      <div className="mt-7 flex flex-1 flex-col gap-1.5">
+      <nav className="mt-7 flex flex-1 flex-col items-center gap-2">
         {ITEMS.map((it) => {
           const Icon = it.icon;
           const on = active === it.id;
@@ -28,25 +32,65 @@ export function SideNav({ active }: { active: Active }) {
               key={it.id}
               href={it.href}
               title={it.label}
+              aria-label={it.label}
+              aria-current={on ? "page" : undefined}
               className={
-                "group relative grid h-11 w-11 place-items-center rounded-xl transition " +
+                "ng-focus group relative grid h-11 w-11 place-items-center rounded-xl transition-colors " +
                 (on
-                  ? "bg-white/[0.07] text-ng-ink"
-                  : "text-ng-faint hover:bg-white/[0.04] hover:text-ng-sub")
+                  ? "bg-teal/[0.12] text-teal"
+                  : "text-cream/40 hover:bg-cream/[0.05] hover:text-cream/80")
               }
             >
               {on && (
-                <span className="absolute -left-[14px] h-5 w-[3px] rounded-full bg-ng-teal" />
+                <span className="absolute -left-[14px] h-5 w-[3px] rounded-full bg-teal" />
               )}
-              <Icon className="h-[18px] w-[18px]" />
+              <Icon />
             </Link>
           );
         })}
-      </div>
-
-      <button className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-ng-teal/80 to-emerald-600 text-[12px] font-semibold text-ng-canvas">
-        D
+      </nav>
+      <button
+        className="ng-focus grid h-9 w-9 place-items-center rounded-full bg-teal/15 text-[13px] font-semibold text-teal"
+        aria-label="Account"
+      >
+        {email ? email[0]?.toUpperCase() : "?"}
       </button>
-    </nav>
+    </aside>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[20px] w-[20px]">
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.6" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.6" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.6" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.6" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+function ChatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[20px] w-[20px]">
+      <path
+        d="M4 5.5h16v10H9l-4 3.5v-3.5H4v-10Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-[20px] w-[20px]">
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2 5.5 5.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
