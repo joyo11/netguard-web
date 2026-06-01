@@ -163,12 +163,30 @@ function ChatPage({ hostname }: { hostname: string | null }) {
       {/* desktop header */}
       <header className="ng-rise relative z-10 hidden items-center justify-between px-6 py-4 sm:px-8 md:flex">
         <div className="flex items-center gap-3">
-          <AvatarB size={30} />
-          <div className="leading-tight">
-            <div className="flex items-center gap-2 text-[14px] font-semibold tracking-tight">
-              NetGuard AI
+          <Link
+            href="/dashboard"
+            aria-label="Back to dashboard"
+            title="Back to dashboard"
+            className="ng-focus group flex items-center gap-2 rounded-lg px-2 py-1.5 text-cream/55 transition-colors hover:bg-cream/[0.04] hover:text-cream"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 transition-transform group-hover:-translate-x-0.5">
+              <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-[13px] font-medium">Dashboard</span>
+          </Link>
+          <span className="h-5 w-px bg-cream/10" />
+          <Link
+            href="/dashboard"
+            className="ng-focus flex items-center gap-3 rounded-lg px-1.5 py-1 transition-colors hover:bg-cream/[0.04]"
+            aria-label="NetGuard home"
+          >
+            <AvatarB size={30} />
+            <div className="leading-tight">
+              <div className="flex items-center gap-2 text-[14px] font-semibold tracking-tight">
+                NetGuard AI
+              </div>
             </div>
-          </div>
+          </Link>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-cream/10 bg-cream/[0.03] px-3 py-1.5 text-[12px] text-cream/55">
           <span className="h-1.5 w-1.5 rounded-full bg-teal ng-livedot" />

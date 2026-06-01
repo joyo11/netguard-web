@@ -17,7 +17,7 @@ export function MobileBar({
 }) {
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/[0.06] bg-[#0a0d13]/85 px-3 backdrop-blur-xl md:hidden">
-      <Link href="/" className="flex items-center gap-2 px-1 py-2">
+      <Link href="/dashboard" className="flex items-center gap-2 px-1 py-2" aria-label="Back to dashboard">
         <Shield className="h-6 w-6" />
         <span className="text-[14px] font-semibold tracking-[-0.01em]">NetGuard</span>
       </Link>
