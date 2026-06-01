@@ -7,6 +7,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+function rowQuery(r: { app: string; host: string; port: number }) {
+  // Pre-baked drill-in question for /chat — uses the row's process +
+  // destination so the answer is grounded in real context.
+  const host = r.host || "this destination";
+  return `What is ${r.app} doing with ${host}:${r.port}? Is it normal?`;
+}
 import { SideNav } from "@/components/side-nav";
 import { MobileBar } from "@/components/mobile-bar";
 import {
@@ -257,12 +264,13 @@ function ActivityTable({ feed }: { feed: Connection[] }) {
             const isWatch = r.state === "watch";
             const isAlert = r.state === "alert";
             const rowBase =
-              "items-center gap-3 border-b border-cream/[0.04] py-3 text-[13px] transition-colors " +
+              "items-center gap-3 border-b border-cream/[0.04] py-3 text-[13px] transition-colors cursor-pointer " +
               (isAlert
-                ? "bg-danger/[0.07] ng-alertpulse"
+                ? "bg-danger/[0.07] ng-alertpulse hover:bg-danger/[0.1]"
                 : isWatch
-                ? "bg-amber/[0.045]"
-                : "opacity-[0.82] hover:bg-cream/[0.02]");
+                ? "bg-amber/[0.045] hover:bg-amber/[0.08]"
+                : "opacity-[0.82] hover:opacity-100 hover:bg-cream/[0.04]");
+            const href = `/chat?q=${encodeURIComponent(rowQuery(r))}`;
             const rowStyle = isWatch
               ? { boxShadow: "inset 3px 0 0 rgba(242,201,76,0.9)" }
               : undefined;
@@ -295,8 +303,10 @@ function ActivityTable({ feed }: { feed: Connection[] }) {
 
             return (
               <div key={i}>
-                {/* Desktop / tablet row (≥sm) */}
-                <div
+                {/* Desktop / tablet row (≥sm) — clicks drill into /chat */}
+                <Link
+                  href={href}
+                  title={`Ask NetGuard about ${r.host}:${r.port}`}
                   className={
                     "hidden grid-cols-[68px_1.4fr_2fr_64px_72px_84px] px-5 sm:grid " + rowBase
                   }
@@ -316,9 +326,11 @@ function ActivityTable({ feed }: { feed: Connection[] }) {
                   <span>
                     <Pill state={r.state as PillState} live={isAlert} />
                   </span>
-                </div>
+                </Link>
                 {/* Compact mobile row (<sm) — drops Time/Port/Bytes into a meta line */}
-                <div
+                <Link
+                  href={href}
+                  title={`Ask NetGuard about ${r.host}:${r.port}`}
                   className={"grid grid-cols-[1.4fr_2fr_72px] px-4 sm:hidden " + rowBase}
                   style={rowStyle}
                 >
@@ -335,7 +347,7 @@ function ActivityTable({ feed }: { feed: Connection[] }) {
                   <span className="justify-self-end">
                     <Pill state={r.state as PillState} live={isAlert} />
                   </span>
-                </div>
+                </Link>
               </div>
               );
             })}

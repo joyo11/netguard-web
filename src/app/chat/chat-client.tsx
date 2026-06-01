@@ -5,8 +5,9 @@
 // Visual layer: aurora, AvatarB, typewriter cursor, shimmer tool pills,
 // particle burst on completion, glow-on-done bubble.
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MobileBar } from "@/components/mobile-bar";
 import { Markdown } from "@/components/markdown";
 import { Aurora, AvatarB, NetGuardGlyph, Particles } from "@/components/v3";
@@ -29,7 +30,12 @@ type StreamEvent =
   | { type: "error"; message: string };
 
 export function ChatClient({ hostname }: { hostname: string | null }) {
-  return <ChatPage hostname={hostname} />;
+  // useSearchParams must live inside Suspense per Next 16.
+  return (
+    <Suspense fallback={null}>
+      <ChatPage hostname={hostname} />
+    </Suspense>
+  );
 }
 
 function ChatPage({ hostname }: { hostname: string | null }) {
@@ -42,6 +48,22 @@ function ChatPage({ hostname }: { hostname: string | null }) {
   const [glowKey, setGlowKey] = useState(0);
   const scroller = useRef<HTMLElement>(null);
   const prevPendingRef = useRef(false);
+
+  // Auto-ask if we landed here from a drill-in (e.g. dashboard row click).
+  // The URL param is cleared after we fire so reload doesn't repeat.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoQ = searchParams.get("q");
+  const askRef = useRef<((q: string) => void) | null>(null);
+  const autoFiredRef = useRef(false);
+
+  useEffect(() => {
+    if (!autoQ || autoFiredRef.current || !askRef.current) return;
+    autoFiredRef.current = true;
+    askRef.current(autoQ);
+    // Drop the query string from the URL so refresh doesn't refire.
+    router.replace("/chat");
+  }, [autoQ, router]);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: 999999, behavior: "smooth" });
@@ -152,6 +174,9 @@ function ChatPage({ hostname }: { hostname: string | null }) {
       setPending(false);
     }
   }
+
+  // Keep the latest ask() reference for the auto-fire effect above.
+  askRef.current = ask;
 
   const empty = thread.length === 0 && !pending && !streaming;
 
