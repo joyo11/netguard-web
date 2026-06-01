@@ -15,23 +15,31 @@ function mintToken(): string {
   return "ng_live_" + randomBytes(24).toString("hex");
 }
 
-async function getOrCreateAgentToken(userId: string): Promise<string> {
+async function getOrCreateAgentToken(userId: string): Promise<{
+  token: string;
+  alreadyInstalled: boolean;
+}> {
   const admin = createServiceClient();
 
   const { data: existing } = await admin
     .from("agent_tokens")
-    .select("token")
+    .select("token, last_used_at")
     .eq("user_id", userId)
     .is("revoked_at", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (existing?.token) return existing.token;
+  if (existing?.token) {
+    return {
+      token: existing.token,
+      alreadyInstalled: existing.last_used_at != null,
+    };
+  }
 
   const token = mintToken();
   await admin.from("agent_tokens").insert({ user_id: userId, token, label: "default" });
-  return token;
+  return { token, alreadyInstalled: false };
 }
 
 export default async function InstallPage() {
@@ -44,7 +52,13 @@ export default async function InstallPage() {
     redirect("/auth/login?next=/install");
   }
 
-  const token = await getOrCreateAgentToken(user!.id);
+  const { token, alreadyInstalled } = await getOrCreateAgentToken(user!.id);
+
+  // If the agent has ever phoned home, skip the install page entirely —
+  // user already did this. Aaron's call: never re-show setup.
+  if (alreadyInstalled) {
+    redirect("/dashboard");
+  }
 
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";

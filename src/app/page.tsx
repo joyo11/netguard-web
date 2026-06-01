@@ -7,6 +7,9 @@ import {
   ShieldFeatureIcon,
 } from "@/components/icons";
 import { AnimatedMock, RevealCard, RevealSection } from "@/components/landing-bits";
+import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 const FEATURES = [
   {
@@ -26,7 +29,14 @@ const FEATURES = [
   },
 ];
 
-export default function Landing() {
+export default async function Landing() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isAuthed = !!user;
+  const userInitial = (user?.email ?? "?").slice(0, 1).toUpperCase();
+
   return (
     <div className="grain ambient relative min-h-screen w-full overflow-hidden">
       {/* nav */}
@@ -56,18 +66,37 @@ export default function Landing() {
           </a>
         </nav>
         <div className="flex items-center gap-3">
-          <Link
-            href="/auth/login"
-            className="text-[13.5px] text-ng-sub transition hover:text-ng-ink"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/install"
-            className="rounded-lg bg-ng-teal px-3.5 py-2 text-[13.5px] font-semibold text-ng-canvas transition hover:bg-ng-teal/90"
-          >
-            Get started
-          </Link>
+          {isAuthed ? (
+            <>
+              <span className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-1 pl-1 pr-3 text-[12.5px] text-ng-sub md:flex">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br from-ng-teal/80 to-emerald-600 text-[11px] font-semibold text-ng-canvas">
+                  {userInitial}
+                </span>
+                <span className="max-w-[160px] truncate">{user!.email}</span>
+              </span>
+              <Link
+                href="/dashboard"
+                className="rounded-lg bg-ng-teal px-3.5 py-2 text-[13.5px] font-semibold text-ng-canvas transition hover:bg-ng-teal/90"
+              >
+                Open dashboard →
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/auth/login"
+                className="text-[13.5px] text-ng-sub transition hover:text-ng-ink"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/install"
+                className="rounded-lg bg-ng-teal px-3.5 py-2 text-[13.5px] font-semibold text-ng-canvas transition hover:bg-ng-teal/90"
+              >
+                Get started
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -90,21 +119,44 @@ export default function Landing() {
         <p className="mx-auto mt-6 max-w-[580px] text-[17px] leading-relaxed text-ng-sub md:text-[18px]">
           An AI security co-pilot that explains your network traffic in plain English — so you can stop guessing what&apos;s phoning home.
         </p>
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <Link
-            href="/install"
-            className="rounded-xl bg-ng-teal px-5 py-3 text-[15px] font-semibold text-ng-canvas shadow-glow transition hover:bg-ng-teal/90"
-          >
-            Get started — free
-          </Link>
-          <Link
-            href="/dashboard"
-            className="rounded-xl border border-white/[0.1] bg-white/[0.03] px-5 py-3 text-[15px] font-medium text-ng-ink transition hover:bg-white/[0.06]"
-          >
-            See a live demo
-          </Link>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          {isAuthed ? (
+            <>
+              <Link
+                href="/dashboard"
+                className="rounded-xl bg-ng-teal px-5 py-3 text-[15px] font-semibold text-ng-canvas shadow-glow transition hover:bg-ng-teal/90"
+              >
+                Open dashboard →
+              </Link>
+              <Link
+                href="/chat"
+                className="rounded-xl border border-white/[0.1] bg-white/[0.03] px-5 py-3 text-[15px] font-medium text-ng-ink transition hover:bg-white/[0.06]"
+              >
+                Open chat
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/install"
+                className="rounded-xl bg-ng-teal px-5 py-3 text-[15px] font-semibold text-ng-canvas shadow-glow transition hover:bg-ng-teal/90"
+              >
+                Get started — free
+              </Link>
+              <Link
+                href="/dashboard"
+                className="rounded-xl border border-white/[0.1] bg-white/[0.03] px-5 py-3 text-[15px] font-medium text-ng-ink transition hover:bg-white/[0.06]"
+              >
+                See a live demo
+              </Link>
+            </>
+          )}
         </div>
-        <p className="mt-4 font-mono text-[12px] text-ng-faint">curl -fsSL https://get.netguard.sh | sh</p>
+        {!isAuthed && (
+          <p className="mt-4 font-mono text-[12px] text-ng-faint">
+            curl -fsSL https://get.netguard.sh | sh
+          </p>
+        )}
       </section>
 
       {/* product screenshot — now an animated mock that cycles scenes */}
