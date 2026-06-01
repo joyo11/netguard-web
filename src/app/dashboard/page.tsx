@@ -7,7 +7,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getRecentFeed, getSummary, type Connection } from "@/data/traffic";
+import {
+  getMachines,
+  getRecentFeed,
+  getSummary,
+  type Connection,
+} from "@/data/traffic";
 import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import { DashboardClient } from "./dashboard-client";
@@ -34,16 +39,28 @@ async function getOrCreateAgentToken(userId: string): Promise<string> {
   return token;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ machine?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login?next=/dashboard");
 
+  const sp = await searchParams;
+  const requested = sp.machine?.trim() || undefined;
+
+  // Fetch the machines list first so we can validate the requested filter.
+  const machines = await getMachines(user!.id);
+  const selectedMachine =
+    requested && machines.some((m) => m.hostname === requested) ? requested : undefined;
+
   const [feed, summary, token] = await Promise.all([
-    getRecentFeed(user!.id, 40),
-    getSummary(user!.id),
+    getRecentFeed(user!.id, 40, selectedMachine),
+    getSummary(user!.id, selectedMachine),
     getOrCreateAgentToken(user!.id),
   ]);
 
@@ -59,6 +76,8 @@ export default async function DashboardPage() {
       summary={summary}
       installCmd={installCmd}
       userEmail={user!.email ?? ""}
+      machines={machines}
+      selectedMachine={selectedMachine ?? null}
     />
   );
 }

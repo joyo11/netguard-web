@@ -34,16 +34,22 @@ type Summary = {
   hostname: string | null;
 };
 
+type Machine = { hostname: string; lastSeenAt: string; count: number };
+
 export function DashboardClient({
   feed,
   summary,
   installCmd,
   userEmail,
+  machines,
+  selectedMachine,
 }: {
   feed: Connection[];
   summary: Summary;
   installCmd: string;
   userEmail: string;
+  machines: Machine[];
+  selectedMachine: string | null;
 }) {
   const hasData = feed.length > 0;
   const isAgentLive =
@@ -70,10 +76,25 @@ export function DashboardClient({
         <div className="mx-auto w-full max-w-[1100px] px-5 py-7 sm:px-8 sm:py-9">
           {/* header row */}
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-[28px] font-semibold tracking-[-0.02em]">Dashboard</h1>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-[28px] font-semibold tracking-[-0.02em]">Dashboard</h1>
+                {machines.length > 1 && (
+                  <MachineSwitcher machines={machines} selected={selectedMachine} />
+                )}
+              </div>
               <p className="mt-1 text-[14px] text-cream/45">
-                {summary.hostname ? (
+                {selectedMachine ? (
+                  <>
+                    Live traffic from{" "}
+                    <span className="font-mono text-cream/70">{selectedMachine}</span>
+                  </>
+                ) : machines.length > 1 ? (
+                  <>
+                    Showing{" "}
+                    <span className="font-mono text-cream/70">all {machines.length} machines</span>
+                  </>
+                ) : summary.hostname ? (
                   <>
                     Live traffic from{" "}
                     <span className="font-mono text-cream/70">{summary.hostname}</span>
@@ -141,6 +162,7 @@ export function DashboardClient({
 
           {hasData ? (
             <>
+              <AwaySummaryCard />
               <StatusBanner summary={summary} worst={worst} />
               <ActivityTable feed={feed} />
             </>
@@ -355,6 +377,226 @@ function ActivityTable({ feed }: { feed: Connection[] }) {
         </div>
     </section>
   );
+}
+
+/* ────────── WHILE-YOU-WERE-AWAY ────────── */
+function AwaySummaryCard() {
+  type Resp = {
+    summary: string;
+    since: string;
+    counts: { total: number; alerts: number; watches: number };
+    empty?: boolean;
+  };
+  const [data, setData] = useState<Resp | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/away-summary", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const j = (await res.json()) as Resp;
+        if (!cancelled) setData(j);
+      } catch {
+        // Silent: if the summary fails, the dashboard still works.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div
+        className="ng-rise mt-7 flex items-center gap-3 rounded-2xl border border-cream/[0.06] bg-cream/[0.02] px-5 py-4"
+        style={{ animationDelay: "30ms" }}
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-teal/[0.08] text-teal">
+          <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 ng-spin">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="42 60" />
+          </svg>
+        </span>
+        <span className="block h-3.5 flex-1 max-w-[420px] rounded ng-shimmer bg-cream/[0.06]" />
+      </div>
+    );
+  }
+
+  if (!data) return null;
+  const { summary, counts, empty } = data;
+
+  return (
+    <div
+      className="ng-rise mt-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-cream/[0.07] bg-cream/[0.025] px-5 py-4"
+      style={{ animationDelay: "30ms" }}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={
+            "grid h-9 w-9 shrink-0 place-items-center rounded-xl " +
+            (empty ? "bg-teal/[0.08] text-teal" : counts.alerts > 0 ? "bg-danger/[0.12] text-danger" : "bg-teal/[0.08] text-teal")
+          }
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+            <path
+              d="M12 3l1.4 4.1L17.5 8.5 13.4 9.9 12 14l-1.4-4.1L6.5 8.5l4.1-1.4L12 3Z"
+              fill="currentColor"
+            />
+          </svg>
+        </span>
+        <div className="min-w-0">
+          <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-cream/40">
+            While you were away
+          </p>
+          <p className="mt-0.5 text-[14.5px] leading-snug text-cream/85">{summary}</p>
+        </div>
+      </div>
+      {!empty && (counts.alerts + counts.watches > 0) && (
+        <div className="flex items-center gap-3 text-[11.5px]">
+          {counts.alerts > 0 && (
+            <span className="flex items-center gap-1.5 rounded-full border border-danger/25 bg-danger/[0.07] px-2.5 py-1 text-danger">
+              <span className="h-1.5 w-1.5 rounded-full bg-danger" />
+              {counts.alerts} alert{counts.alerts === 1 ? "" : "s"}
+            </span>
+          )}
+          {counts.watches > 0 && (
+            <span className="flex items-center gap-1.5 rounded-full border border-amber/25 bg-amber/[0.07] px-2.5 py-1 text-amber">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber" />
+              {counts.watches} watch
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ────────── MACHINE SWITCHER ────────── */
+function MachineSwitcher({
+  machines,
+  selected,
+}: {
+  machines: Machine[];
+  selected: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrap = useState<HTMLDivElement | null>(null);
+  // Inline ref via useRef would be cleaner, but the popover dismiss
+  // logic only needs to know whether the click is inside the wrapper.
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest("[data-machine-switcher]")) setOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  // No-op to satisfy linters about useState usage of wrap above
+  void wrap;
+
+  const label = selected ?? "All machines";
+
+  return (
+    <div data-machine-switcher className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="ng-focus flex items-center gap-2 rounded-full border border-cream/10 bg-cream/[0.04] px-3 py-1.5 text-[12.5px] text-cream/75 transition-colors hover:bg-cream/[0.07]"
+      >
+        <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 text-cream/55">
+          <rect x="4" y="5" width="16" height="11" rx="1.6" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M9 20h6M12 16v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+        <span className="font-mono">{label}</span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className={"h-3.5 w-3.5 text-cream/45 transition-transform " + (open ? "rotate-180" : "")}
+        >
+          <path d="M8 9l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute left-0 top-[40px] z-40 w-[260px] origin-top-left overflow-hidden rounded-xl border border-cream/10 bg-[#0d111a] shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)] ng-pop"
+        >
+          <MachineOption
+            href="/dashboard"
+            label="All machines"
+            sub={`${machines.length} agent${machines.length === 1 ? "" : "s"} reporting`}
+            active={!selected}
+          />
+          <div className="h-px bg-cream/[0.06]" />
+          {machines.map((m) => (
+            <MachineOption
+              key={m.hostname}
+              href={`/dashboard?machine=${encodeURIComponent(m.hostname)}`}
+              label={m.hostname}
+              sub={`${m.count} recent · last ${timeAgo(m.lastSeenAt)}`}
+              active={selected === m.hostname}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MachineOption({
+  href,
+  label,
+  sub,
+  active,
+}: {
+  href: string;
+  label: string;
+  sub: string;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={
+        "ng-focus flex items-start gap-2.5 px-4 py-3 text-left transition-colors hover:bg-cream/[0.04] " +
+        (active ? "bg-teal/[0.08]" : "")
+      }
+    >
+      <span
+        className={
+          "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full " +
+          (active ? "bg-teal" : "bg-cream/25")
+        }
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-mono text-[13px] text-cream/85">{label}</span>
+        <span className="mt-0.5 block truncate text-[11.5px] text-cream/40">{sub}</span>
+      </span>
+    </Link>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const sec = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return `${Math.round(sec)}s ago`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.round(sec / 3600)}h ago`;
+  return `${Math.round(sec / 86400)}d ago`;
 }
 
 function InstallEmpty({ installCmd }: { installCmd: string }) {

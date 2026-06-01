@@ -25,6 +25,7 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { classify } from "@/lib/classify";
+import { enrichIps } from "@/lib/enrich";
 import { NextResponse, type NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -85,29 +86,45 @@ export async function POST(req: NextRequest) {
   const userId = tokenRow.user_id;
   const nowIso = new Date().toISOString();
 
-  // Map incoming → DB rows. Drop rows that aren't usable.
+  // v4: enrich rows that arrived as IPs with reverse-DNS hostnames so the
+  // dashboard shows "clients3.google.com" instead of "216.239.34.223".
+  // Treats `remote_host` as authoritative when the agent already had it;
+  // only fills in when missing OR when the "host" looks like a raw IP.
+  const needsLookup = connections
+    .filter((c) => c && (c.remote_host || c.remote_ip))
+    .map((c) => c.remote_ip || c.remote_host || "")
+    .filter(Boolean);
+  const enriched = await enrichIps(needsLookup);
+
   const rows = connections
     .filter((c) => c && (c.remote_host || c.remote_ip))
-    .map((c) => ({
-      user_id: userId,
-      hostname,
-      ts: c.ts ?? nowIso,
-      app: c.app ?? null,
-      proc: c.proc ?? null,
-      remote_host: c.remote_host ?? null,
-      remote_ip: c.remote_ip ?? null,
-      cc: c.cc ?? null,
-      port: typeof c.port === "number" ? c.port : null,
-      bytes_out: typeof c.bytes_out === "number" ? c.bytes_out : 0,
-      bytes_in: typeof c.bytes_in === "number" ? c.bytes_in : 0,
-      // Server-side classification — overrides whatever the agent sent.
-      state: classify({
-        remote_host: c.remote_host,
-        remote_ip: c.remote_ip,
-        port: c.port,
-        app: c.app,
-      }),
-    }));
+    .map((c) => {
+      const ip = c.remote_ip || (c.remote_host && /^[\d.:]+$/.test(c.remote_host) ? c.remote_host : null);
+      const resolvedHost = ip ? enriched.get(ip) ?? null : null;
+      const finalHost = c.remote_host && !/^[\d.:]+$/.test(c.remote_host)
+        ? c.remote_host
+        : resolvedHost ?? c.remote_host ?? null;
+
+      return {
+        user_id: userId,
+        hostname,
+        ts: c.ts ?? nowIso,
+        app: c.app ?? null,
+        proc: c.proc ?? null,
+        remote_host: finalHost,
+        remote_ip: c.remote_ip ?? null,
+        cc: c.cc ?? null,
+        port: typeof c.port === "number" ? c.port : null,
+        bytes_out: typeof c.bytes_out === "number" ? c.bytes_out : 0,
+        bytes_in: typeof c.bytes_in === "number" ? c.bytes_in : 0,
+        state: classify({
+          remote_host: finalHost,
+          remote_ip: c.remote_ip,
+          port: c.port,
+          app: c.app,
+        }),
+      };
+    });
 
   if (rows.length === 0) {
     return NextResponse.json({ inserted: 0, skipped: connections.length });

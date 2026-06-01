@@ -53,36 +53,59 @@ function formatBytes(n: number): string {
 
 // ─── Tools used by /api/chat ────────────────────────────────────────────
 
-export async function getSummary(userId: string) {
+// Optional machine filter passed through to every query so a user
+// with multiple agents installed can scope the view.
+export type MachineFilter = string | undefined;
+
+function applyMachine<Q extends { eq: (col: string, val: string) => Q }>(
+  q: Q,
+  machine: MachineFilter
+): Q {
+  return machine ? q.eq("hostname", machine) : q;
+}
+
+export async function getSummary(userId: string, machine?: MachineFilter) {
   const admin = createServiceClient();
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const since1h = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
-  const { count: total24h } = await admin
-    .from("connections")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("ts", since24h);
+  const { count: total24h } = await applyMachine(
+    admin
+      .from("connections")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("ts", since24h),
+    machine
+  );
 
-  const { count: total1h } = await admin
-    .from("connections")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("ts", since1h);
+  const { count: total1h } = await applyMachine(
+    admin
+      .from("connections")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("ts", since1h),
+    machine
+  );
 
-  const { count: alerts } = await admin
-    .from("connections")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("state", "alert")
-    .gte("ts", since24h);
+  const { count: alerts } = await applyMachine(
+    admin
+      .from("connections")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("state", "alert")
+      .gte("ts", since24h),
+    machine
+  );
 
-  const { count: watching } = await admin
-    .from("connections")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("state", "watch")
-    .gte("ts", since24h);
+  const { count: watching } = await applyMachine(
+    admin
+      .from("connections")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("state", "watch")
+      .gte("ts", since24h),
+    machine
+  );
 
   const { data: tokenRow } = await admin
     .from("agent_tokens")
@@ -93,13 +116,15 @@ export async function getSummary(userId: string) {
     .limit(1)
     .maybeSingle();
 
-  const { data: latest } = await admin
-    .from("connections")
-    .select("hostname")
-    .eq("user_id", userId)
-    .order("ts", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const { data: latest } = await applyMachine(
+    admin
+      .from("connections")
+      .select("hostname")
+      .eq("user_id", userId)
+      .order("ts", { ascending: false })
+      .limit(1),
+    machine
+  ).maybeSingle();
 
   return {
     totalConnections24h: total24h ?? 0,
@@ -109,6 +134,34 @@ export async function getSummary(userId: string) {
     agentLastSeenAt: tokenRow?.last_used_at ?? null,
     hostname: latest?.hostname ?? null,
   };
+}
+
+// Lists every machine that's posted at least one connection. Used by
+// the dashboard switcher.
+export async function getMachines(userId: string) {
+  const admin = createServiceClient();
+  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await admin
+    .from("connections")
+    .select("hostname, ts")
+    .eq("user_id", userId)
+    .gte("ts", since30d)
+    .order("ts", { ascending: false })
+    .limit(2000);
+
+  const seen = new Map<string, { hostname: string; lastSeenAt: string; count: number }>();
+  for (const row of data ?? []) {
+    const h = (row.hostname ?? "unknown") as string;
+    const existing = seen.get(h);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      seen.set(h, { hostname: h, lastSeenAt: row.ts as string, count: 1 });
+    }
+  }
+  return Array.from(seen.values()).sort(
+    (a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime()
+  );
 }
 
 export async function getAlerts(userId: string) {
@@ -171,12 +224,12 @@ export async function findByHost(userId: string, pattern: string) {
 }
 
 // Used by the dashboard server component to show the live feed.
-export async function getRecentFeed(userId: string, limit = 40) {
+export async function getRecentFeed(userId: string, limit = 40, machine?: MachineFilter) {
   const admin = createServiceClient();
-  const { data } = await admin
-    .from("connections")
-    .select("*")
-    .eq("user_id", userId)
+  const { data } = await applyMachine(
+    admin.from("connections").select("*").eq("user_id", userId),
+    machine
+  )
     .order("ts", { ascending: false })
     .limit(limit);
   return (data ?? []).map((r) => rowToConnection(r as DbRow));
