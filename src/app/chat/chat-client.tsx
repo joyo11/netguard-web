@@ -150,7 +150,7 @@ function ChatPage({ hostname }: { hostname: string | null }) {
       <div className="relative z-10 flex min-h-screen flex-1 flex-col">
         <MobileBar active="chat" />
         {/* header — single tight line, custom glyph (per Aaron) */}
-        <header className="flex items-center justify-between border-b border-white/[0.06] bg-[#0a0d13]/50 px-7 py-3 backdrop-blur-xl">
+        <header className="hidden items-center justify-between border-b border-white/[0.06] bg-[#0a0d13]/50 px-7 py-3 backdrop-blur-xl md:flex">
           <div className="flex items-center gap-2.5">
             <AiGlyph />
             <h1 className="text-[13.5px] font-semibold tracking-[-0.01em] text-ng-ink">
@@ -246,7 +246,10 @@ function ChatPage({ hostname }: { hostname: string | null }) {
         </div>
 
         {/* composer */}
-        <div className="border-t border-white/[0.06] bg-[#0a0d13]/50 px-6 py-4 backdrop-blur-xl">
+        <div
+          className="border-t border-white/[0.06] bg-[#0a0d13]/50 px-4 py-4 backdrop-blur-xl md:px-6"
+          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        >
           <div className="mx-auto w-full max-w-[720px]">
             <div className="mb-3 flex flex-wrap gap-2">
               {FOLLOWUP_PROMPTS.map((p) => (

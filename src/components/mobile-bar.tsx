@@ -16,12 +16,12 @@ export function MobileBar({
   active: "dashboard" | "settings" | "chat" | null;
 }) {
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/[0.06] bg-[#0a0d13]/85 px-4 backdrop-blur-xl md:hidden">
-      <Link href="/" className="flex items-center gap-2">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/[0.06] bg-[#0a0d13]/85 px-3 backdrop-blur-xl md:hidden">
+      <Link href="/" className="flex items-center gap-2 px-1 py-2">
         <Shield className="h-6 w-6" />
         <span className="text-[14px] font-semibold tracking-[-0.01em]">NetGuard</span>
       </Link>
-      <nav className="flex items-center gap-1">
+      <nav className="flex items-center gap-0.5">
         {TABS.map((t) => {
           const Icon = t.icon;
           const on = active === t.id;
@@ -30,8 +30,9 @@ export function MobileBar({
               key={t.id}
               href={t.href}
               title={t.label}
+              aria-label={t.label}
               className={
-                "grid h-10 w-10 place-items-center rounded-lg transition " +
+                "grid h-11 w-11 place-items-center rounded-lg transition " +
                 (on
                   ? "bg-white/[0.08] text-ng-ink"
                   : "text-ng-faint hover:bg-white/[0.04] hover:text-ng-sub")
